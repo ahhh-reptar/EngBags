@@ -13,6 +13,11 @@ EngInventory, first made by Engival, then edited by Baroque, now by me.  An edit
 
 ---
 
+
+See below for the exact changes Baroque made to EngInventory.
+
+
+---
 # Original Baroque Readme
 
 EngInventory - 2019 Baroque edit
