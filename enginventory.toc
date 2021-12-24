@@ -1,0 +1,10 @@
+## Interface: 11200
+## Title: EngInventory |cFFFFFFFF- Baroque edit|r and then AHHH_REPTAR edit
+## Notes: AutoSorting Inventory Replacement, now includes bagbar and bank
+## Author: Engival
+## RequiredDeps: 
+## OptionalDeps: lootlink, auctioneer, equipcompare
+## SavedVariables: EngInventoryConfig
+## Dependencies: 
+enginventory.xml
+ei_options.xml
