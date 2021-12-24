@@ -1,4 +1,19 @@
 # EngInventory
+
+# EngInventory
+EngInventory, first made by Engival, then edited by Baroque, now by me.  An edit of an edit of what is basically an edit of the default interface.  Play the Inception music.
+
+# Differences Between Baroque's Edit and Mine
+- I extend bag slot support from 128 to 160, which (to my understanding) is the current max at Turtle WoW.
+- I include a bag bar at the top of the frame, next to the edit button.
+
+# Known Issues
+- If you take a bag out of a slot and don't replace it, the original bag icon sometimes stays there.  This fixes itself on reload, relog, or just placing a new bag there.  Not a serious issue so I'm not gonna bother trying to fix it.
+
+---
+
+# Original Baroque Readme
+
 EngInventory - 2019 Baroque edit
 
 One-bag with item type auto-sort. I've modded it to use sensible categorization/auto sorting for both leveling and end-game Vanilla 1.12. It's modified for all the requirements of a serious Vanilla end-game raider, presenting inventory contents in a streamlined way.
