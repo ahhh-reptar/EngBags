@@ -9,6 +9,7 @@ EngInventory, first made by Engival, then edited by Baroque, now by me.  An edit
 
 # Known Issues
 - If you take a bag out of a slot and don't replace it, the original bag icon sometimes stays there.  This fixes itself on reload, relog, or just placing a new bag there.  Not a serious issue so I'm not gonna bother trying to fix it.
+- If you don't have any bags equipped AT ALL, the bag icons are almost 50% larger than intended.
 - If you don't have at least 12 collumns (more if you have a lot of gold), the bag bar will run into your money tracker.  So, go thicc or go home.
 
 ---
