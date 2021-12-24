@@ -1,7 +1,7 @@
 # EngInventory
 
 # EngInventory
-EngInventory, first made by Engival, then edited by Baroque, now by me.  An edit of an edit of what is basically an edit of the default interface.  Play the Inception music.
+EngInventory, first made by Engival, then edited by Baroque, now by me.  An edit of an edit.  Play the Inception music.
 
 # Differences Between Baroque's Edit and Mine
 - I extend bag slot support from 128 to 160, which (to my understanding) is the current max at Turtle WoW.
