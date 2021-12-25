@@ -2,7 +2,7 @@
 	<Script file="default_items.lua"/>
 	<Script file="tooltip.lua"/>
 	<Script file="support_funcs.lua"/> 
-	<Script file="enginventory.lua"/>
+	<Script file="engbags.lua"/>
 	<Script file="eb_config.lua"/>
 	<Script file="chat_cmd_handler.lua"/> 
 	<Script file="EngBank.lua"/> 
