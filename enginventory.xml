@@ -24,7 +24,7 @@
 			<OnLoad>
 				this:RegisterEvent("BAG_UPDATE");
 				EngPaperDollItemSlotButton_OnLoad();
-				EngInventory_Update_BagSlots()
+				EngInventory_Update_BagSlots;
 			</OnLoad>
 			<OnClick>
 				EngInventorySlotButton_OnClick();
