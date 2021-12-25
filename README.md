@@ -12,6 +12,15 @@ EngInventory, first made by Engival, then edited by Baroque, now by me.  An edit
 - If you don't have any bags equipped AT ALL, the bag icons sometimes are almost 50% larger than intended.
 - If you don't have at least 12 collumns (more if you have a lot of gold), the bag bar will run into your money tracker.  So, go thicc or go home.
 
+# Changelog
+## Day 1 Patch - Mods Imitate Game Releases
+- Code cleanup, realized I missed a spot and fixed it, actually have 160 bag slot support now
+- Experimentation with bank frame
+
+## Initial Upload
+- Updated bag slot support to 160
+- Added a bag bar to the top of the window.
+
 ---
 
 
