@@ -1,4 +1,4 @@
-
+﻿
 --[[
 	Item format:
 
@@ -8,7 +8,7 @@
 
 --]]
 
-EngInventory_DefaultItemOverrides = {
+EngBags_DefaultItemOverrides = {
 
 	["6948:0:0:0-SB"] = "HEARTH",		-- Hearthstone
 	["21213:0:0:0"] = "MOUNT",	-- Preserved Holly (technically a consumable)
@@ -317,8 +317,8 @@ EngInventory_DefaultItemOverrides = {
 
 }
 
-EngInventory_DefaultSearchItemsINSERTTO = 2;
-EngInventory_DefaultSearchList = {
+EngBags_DefaultSearchItemsINSERTTO = 2;
+EngBags_DefaultSearchList = {
 	-- Category, Keywords, Tooltip Search, ItemType
 	-- if you put loc::, the end of the string will be looked up in the localization table
 	-- matching patterns in lines placed higher in this list will have precedence over matching patterns in lines placed lower in this list

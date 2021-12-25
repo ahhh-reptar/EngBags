@@ -1,106 +1,88 @@
-ENGINVENTORY_VERSION = "20190330";
---[[ Inventory replacement - By Engival of Shadowsong
-
- This mod is heavily inspired by AllInOneInventory. (basically learning how to script mods as AIOI as a base)
-
- Current Features:
- Sort your items into seperate sub-windows (known through the code as "bars").  automatically place 3 bars in a row, changeing the
- size dynamically.  Since placement is completely automatic, I figure it could get annoying when you move temporary stuff into
- your inventory.  (ex: take out your enchanting stuff to do something, then have to hunt for the items to put it back), so I've
- put a label on items that are "new" in your inventory.
-
-Version history
-
- 20050804 - Initial development - what the hell is this lua crap?  You call this a scripting language?  :(
- 20050808 - It works!  Made 2nd design of UpdateWindow, and now I'm somewhat happy with how it looks.  Buttons work too.
- 20050809 - Initial release on curse-gaming.  Bag bindings done, got auctioneer working.  Must be forgetting something...
- 20050810 - Bug fixes
-            - Fixed issue where bank bags were being overridden as well.
-            - Added localization file, need translators now.
-            - Changed auto-layout code a bit.  Should look a bit cleaner.
- 20050811 - Buttons!  Close button, lock/unlock, Hilight New Items (actually gray out not-new items),
-            Edit mode: Let's you move catagories arround just by clicking,  increase/decrease # of columns
-	    Fixes to localization.
-	    Added Roktarr's german translations.
- 20050812 - Added right click menus (right click on main window, buttons, or numbered targets)
-            Window position is now saved at scale 1.00, so if you change the scale of the window, the anchor point
-	    won't move.  (saved window position will be trashed in the config file)
-            /ei scale #.##
-	    Hook for ToggleDropDownMenu() to fix popups from going off the screen.  I noticed that titan panel does this also,
-	    but it shouldn't affect anything.
- 20050818 - Fixed bug in EngInventory_NumericRange which would cause an error when a config value was out of range
- 20050822 - oops, forgot to track my changes.  I'll try to write something here later.           
- 20050822b - quick bug fix, problem with initilization of some fields
- 20050919 - Added dressing room support
-            Fixed bug/interface change in code that called lootlink
-	    Added some code to see if some "putinslot" values aren't assigned to a bar
-	    Added options to add/remove hooks for specific bags
-	    Added a keybinding to toggle bags
-            Created hooks for AxuItemMenus.  For the current version, I'll be calling AxuItemMenus directly.  If the author wants
-            to support EngInventory, and has a need to change things, he can define ENGINVENTORY_DONT_CALL_AXUITEM, and a hook
-	    function named AxuItemMenus_EngInventoryHook(bag,slot) which will be called in my handler.  If he returns a value of
-	    1 from that hook, my handler will do a return right away.
-	    *** note, I won't call dressing room functions if AuxItemMenu is hooked
- 20060329 - Updated TOC for 1.10
-            Fixed bug with gametooltip changes in 1.10
-            Integrated changes from the modified version of EngInventory posted on auctioneer's site
-	    Fixed error with hunter training window
- 20190330 - Baroque edit
-            Updated TOC for 1.12
-            Extended bag slot support from 109 slots to 128 slots (16-slot main bag & 4x 28-slot bag)
-            Modified OpenAllBags hook to allow Blizzard "Open All Bags" keybind to actually toggle, instead of just open bags (similar to default UI behaviour)
-            Modified default settings: scale from 0.64 to 1 and columns from 9 to 10
-            Modified default color settings: background and borders from blue to dark gray
-            Modified categorization groups
-            Modified categorization string search patterns
-            Added over 300 items to specifically categorize (default override)
+﻿-- Constants
+ENGINVENTORY_DEBUGMESSAGES = 0;         -- 0 = off, 1 = on
+ENGINVENTORY_SHOWITEMDEBUGINFO = 0;
+ENGINVENTORY_WIPECONFIGONLOAD = 0;	-- for debugging, test it out on a new config every load
 
 
-Credits
--------
+BINDING_HEADER_ENGINVENTORY = "EngInventory @ EngBags";
+BINDING_NAME_EI_TOGGLE = "Toggle Inventory Window";
 
-Roktarr
-	- German localization!
-Sarf of AllInOneInventory
-	- Used AIOI as a learning base, and some pieces of code have been completely cut'n'pasted.
-Lozareth of Discord Action Bars
-	- Ripped your font and learned how to make a big number inside a button
-Everyone on Curse-gaming
-	- Excellent feedback and suggestions
+ENGINVENTORY_MAXBUTTONS = 160;
 
 
-Notes to self
-
- Why does AIOI hook the following functions:
-  SellValue_OnShow
-  UseContainerItem
+ENGINVENTORY_TOP_PADWINDOW = 25;
 
 
-Todo   ***** UPDATE THIS LATER *****
+EngInventory_ShowPrice = 1;     -- ???
 
- general
+ENGINVENTORY_WINDOWBOTTOMPADDING_EDITMODE = 50;
+ENGINVENTORY_WINDOWBOTTOMPADDING_NORMALMODE = 40;
 
-  Add BAG's to the window for people who hide their default art
+EngInventory_WindowBottomPadding = ENGINVENTORY_WINDOWBOTTOMPADDING_NORMALMODE;
 
-  Create a quick bar for new items
+--[[ New data layout:
 
+	bar, position = refers to the virtual locations
+	bagnum, slotnum = refers to physical bag/slot
 
-
- enginventory.lua
-  --
-
-
- tooltip.lua
-  --
-
-
-function list  (this is my quick navigation using find)
-
-** need to rebuild this
-
+	EngInventory_item_cache[ bag ][ bag_slot ]
+		- Contains all the data we collect from the items in the bags.
+		- We collect this data before sorting!
+	EngInventory_bar_positions[ bar_number ][ position ] = { ["bagnum"]=bagnum, ["slotnum"]=slotnum }
+		- Contains the final locations in my window after sorting
+	EngInventory_buttons[ frame_name ] = { ["bagnum"]=bagnum, ["slotnum"]=slotnum }
 --]]
 
+EngInventory_item_cache = { {}, {}, {}, {}, {} };	-- cache of all the items as they appear in bags
+EngInventory_bar_positions = {};
+EngInventory_buttons = {};
+EngInventory_hilight_new = 0;
+EngInventory_edit_mode = 0;
+EngInventory_edit_hilight = "";         -- when editmode is 1, which items do you want to hilight
+EngInventory_edit_selected = "";        -- when editmode is 1, this is the class of item you clicked on
+EngInventory_RightClickMenu_mode = "";
+EngInventory_RightClickMenu_opts = {};
+EngInventory_Bags = { KEYRING_CONTAINER, 0, 1, 2, 3, 4}  -- add support for keyring
+
+ENGINVENTORY_NOTNEEDED = 0;	-- when items haven't changed, or only item counts
+ENGINVENTORY_REQUIRED = 1;	-- when items have changed location, but it's been sorted once and won't break if we don't sort again
+ENGINVENTORY_MANDATORY = 2;	-- it's never been sorted, the window is in an unstable state, you MUST sort.
+
+EngInventory_resort_required = ENGINVENTORY_MANDATORY;
+EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
+
+EngInventory_BuildTradeList = {};	-- only build a full list of trade skill info once
+EngInventory_AddItem = nil;
+
+-- Mod developers that hook the PickupContainerItem function need to change these variables
+-- to disable EngBags implementation of alt+click functions, you can disable one, two or all :)
+-- This is to avoid conflicts with more than one mod implementing the alt+click functions.
+-- I tried to check for every addon that plays with that functions but there are a lot and i cant
+-- do that, please devs, simply change this variables to let this addon work with yours.
+EngBags_AltClick_Auction = 1;
+EngBags_AltClick_Trade = 1;
+EngBags_AltClick_Mail = 1;
+
+-- These are catagories to leave off the right click menu.  just trying to make space
+--	** not needed anymore, since I created a 3rd level of the dropdown
+--[[ EngInventory_Catagories_Exclude_List = {
+	["BANDAGES"] = 1,
+	["EMPTY_PROJECTILE_SLOTS"] = 1,
+	["EMPTY_SLOTS"] = 1,
+	["HEALTHSTONE"] = 1,
+	["JUJU"] = 1
+	}; --]]
+EngInventory_Catagories_Exclude_List = {};
+------------------------
 --Reptar Edits
+
+function EngInventory_Update_BagSlots()
+	Ch4racterBagSlot1:Show();
+	Ch4racterBagSlot2:Show();
+	Ch4racterBagSlot3:Show();
+	Ch4racterBagSlot4:Show();
+end
+
 function EngPaperDollItemSlotButton_OnLoad()
 	this:RegisterEvent("UNIT_INVENTORY_CHANGED");
 	this:RegisterEvent("ITEM_LOCK_CHANGED");
@@ -126,7 +108,7 @@ function EngPaperDollItemSlotButton_OnLoad()
 	PaperDollItemSlotButton_Update();
 end
 
-function EngBagSlotButton_OnClick()
+function EngInventorySlotButton_OnClick()
 	local id = this:GetID();
 	local translatedID = id - CharacterBag0Slot:GetID() + 1;
 	local hadItem = PutItemInBag(id);
@@ -146,7 +128,7 @@ function EngBagSlotButton_OnClick()
 --	this:SetChecked(isVisible);
 end
 
-function EngBagSlotButton_OnDrag()
+function EngInventorySlotButton_OnDrag()
 	local translatedID = this:GetID() - CharacterBag0Slot:GetID() + 1;
 	PickupBagFromSlot(this:GetID());
 	PlaySound("BAGMENUBUTTONPRESS");
@@ -161,110 +143,7 @@ function EngBagSlotButton_OnDrag()
 --	this:SetChecked(isVisible);
 end
 
-function EngInventory_Update_BagSlots()
-	Ch4racterBagSlot1:Show();
-	Ch4racterBagSlot2:Show();
-	Ch4racterBagSlot3:Show();
-	Ch4racterBagSlot4:Show();
-	Ch4racterBagSlot1:SetScale(0.7);
-	Ch4racterBagSlot2:SetScale(0.7);
-	Ch4racterBagSlot3:SetScale(0.7);
-	Ch4racterBagSlot4:SetScale(0.7);
-end
--- End Reptar Edits
-
--- Constants
-ENGINVENTORY_DEBUGMESSAGES = 0;         -- 0 = off, 1 = on
-ENGINVENTORY_SHOWITEMDEBUGINFO = 1;
-ENGINVENTORY_WIPECONFIGONLOAD = 0;	-- for debugging, test it out on a new config every load
-
-
-ENGINVENTORY_MAX_BARS = 15;
-
-BINDING_HEADER_ENGINVENTORY = "EngInventory "..ENGINVENTORY_VERSION;
-BINDING_NAME_EI_TOGGLE = "Toggle Inventory Window";
-
-ENGINVENTORY_MAXBUTTONS = 160;
-ENGINVENTORY_BUTTONFRAME_X_PADDING = 2;
-ENGINVENTORY_BUTTONFRAME_BUTTONWIDTH = 30;
-ENGINVENTORY_BUTTONFRAME_WIDTH = ENGINVENTORY_BUTTONFRAME_BUTTONWIDTH + (ENGINVENTORY_BUTTONFRAME_X_PADDING*2);
-ENGINVENTORY_BUTTONFRAME_Y_PADDING = 1;
-ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT = 30;
-ENGINVENTORY_BUTTONFONTHEIGHT = 0.35 * ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT;
-ENGINVENTORY_BUTTONFRAME_HEIGHT = ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT + (ENGINVENTORY_BUTTONFRAME_Y_PADDING*2);
-ENGINVENTORY_BKGRFRAME_WIDTH = ENGINVENTORY_BUTTONFRAME_BUTTONWIDTH * 1.6;  -- 40 -> 64
-ENGINVENTORY_BKGRFRAME_HEIGHT = ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT * 1.6;
-ENGINVENTORY_COOLDOWN_SCALE = 0.85;
-ENGINVENTORY_TOP_PADWINDOW = 25;
-
-ENGINVENTORY_SORTLOWESTVALUE = 0;
-ENGINVENTORY_NOSORT = 0;
-ENGINVENTORY_SORTBYNAME = 1;
-ENGINVENTORY_SORTBYNAMEREV = 2; -- reverses the name then sorts it:  ie:   "Potion Mana Major" vs "Major Mana Potion"
-ENGINVENTORY_SORTHIGHESTVALUE = 2;
-
-ENGINVENTORY_MAXCOLUMNS_MAX = 20;
-ENGINVENTORY_MAXCOLUMNS_MIN = 8;
-
-ENGINVENTORY_BUTTONSIZE_MIN = 25;
-ENGINVENTORY_BUTTONSIZE_MAX = 50;
-
-ENGINVENTORY_FONTSIZE_MIN = 8;
-ENGINVENTORY_FONTSIZE_MAX = 20;
-
-ENGINVENTORY_MAINWINDOWCOLORIDX = 17;
-
-EngInventory_ShowPrice = 1;     -- ???
-
-ENGINVENTORY_WINDOWBOTTOMPADDING_EDITMODE = 25;
-ENGINVENTORY_WINDOWBOTTOMPADDING_NORMALMODE = 0;
-
-EngInventory_WindowBottomPadding = ENGINVENTORY_WINDOWBOTTOMPADDING_NORMALMODE;
-
---[[ New data layout:
-
-	bar, position = refers to the virtual locations
-	bagnum, slotnum = refers to physical bag/slot
-
-	EngInventory_item_cache[ bag ][ bag_slot ]
-		- Contains all the data we collect from the items in the bags.
-		- We collect this data before sorting!
-	EngInventory_bar_positions[ bar_number ][ position ] = { ["bagnum"]=bagnum, ["slotnum"]=slotnum }
-		- Contains the final locations in my window after sorting
-	EngInventory_buttons[ frame_name ] = { ["bagnum"]=bagnum, ["slotnum"]=slotnum }
---]]
-
-EngInventory_item_cache = { {}, {}, {}, {}, {} };	-- cache of all the items as they appear in bags
-EngInventory_bar_positions = {};
---EngInventory_inventory_cache = {};	-- old cacheing system, remove all traces of it from the code!
-EngInventory_buttons = {};
-EngInventory_hilight_new = 0;
-EngInventory_edit_mode = 0;
-EngInventory_edit_hilight = "";         -- when editmode is 1, which items do you want to hilight
-EngInventory_edit_selected = "";        -- when editmode is 1, this is the class of item you clicked on
-EngInventory_RightClickMenu_mode = "";
-EngInventory_RightClickMenu_opts = {};
-
-ENGINVENTORY_NOTNEEDED = 0;	-- when items haven't changed, or only item counts
-ENGINVENTORY_REQUIRED = 1;	-- when items have changed location, but it's been sorted once and won't break if we don't sort again
-ENGINVENTORY_MANDATORY = 2;	-- it's never been sorted, the window is in an unstable state, you MUST sort.
-
-EngInventory_resort_required = ENGINVENTORY_MANDATORY;
-EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
-
-EngInventory_BuildTradeList = {};	-- only build a full list of trade skill info once
-
--- These are catagories to leave off the right click menu.  just trying to make space
---	** not needed anymore, since I created a 3rd level of the dropdown
---[[ EngInventory_Catagories_Exclude_List = {
-	["BANDAGES"] = 1,
-	["EMPTY_PROJECTILE_SLOTS"] = 1,
-	["EMPTY_SLOTS"] = 1,
-	["HEALTHSTONE"] = 1,
-	["JUJU"] = 1
-	}; --]]
-EngInventory_Catagories_Exclude_List = {};
-------------------------
+-- End Reptar Edits -- 
 
 EngInventory_ConfigOptions_Default = {
 	{
@@ -272,27 +151,11 @@ EngInventory_ConfigOptions_Default = {
 		  ["text"] = "Window Options" },
 	},
 	{},	---------------------------------------------------------------------------------------
-	{	-- Window Scale
-		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Window Scale:" },
-		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = "0.64" },
-		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = 0.64, ["maxValue"] = 1.00, ["valueStep"] = 0.01,
-		  ["defaultValue"] = function()
-				return EngInventoryConfig["frameWindowScale"];
-			end,
-		  ["func"] = function(v)
-				EngInventoryConfig["frameWindowScale"] = tonumber(v);
-				EngInventory_SetDefaultValues(0);
-				EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
-				EngInventory_UpdateWindow();
-			end
-		},
-		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = "1.00" }
-	},
 
 	{	-- Window Columns
 		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Columns:" },
-		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = ENGINVENTORY_MAXCOLUMNS_MIN },
-		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = ENGINVENTORY_MAXCOLUMNS_MIN, ["maxValue"] = ENGINVENTORY_MAXCOLUMNS_MAX, ["valueStep"] = 1,
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = EngBags_MAXCOLUMNS_MIN },
+		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = EngBags_MAXCOLUMNS_MIN, ["maxValue"] = EngBags_MAXCOLUMNS_MAX, ["valueStep"] = 1,
 		  ["defaultValue"] = function()
 				return EngInventoryConfig["maxColumns"];
 			end,
@@ -303,13 +166,13 @@ EngInventory_ConfigOptions_Default = {
 				EngInventory_UpdateWindow();
 			end
 		},
-		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = ENGINVENTORY_MAXCOLUMNS_MAX }
+		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = EngBags_MAXCOLUMNS_MAX }
 	},
 
 	{	-- Button Size
 		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Button Size:" },
-		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = ENGINVENTORY_BUTTONSIZE_MIN },
-		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = ENGINVENTORY_BUTTONSIZE_MIN, ["maxValue"] = ENGINVENTORY_BUTTONSIZE_MAX, ["valueStep"] = 1,
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = EngBags_BUTTONSIZE_MIN },
+		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = EngBags_BUTTONSIZE_MIN, ["maxValue"] = EngBags_BUTTONSIZE_MAX, ["valueStep"] = 1,
 		  ["defaultValue"] = function()
 				return EngInventoryConfig["frameButtonSize"];
 			end,
@@ -320,76 +183,43 @@ EngInventory_ConfigOptions_Default = {
 				EngInventory_UpdateWindow();
 			end
 		},
-		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = ENGINVENTORY_BUTTONSIZE_MAX }
+		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = EngBags_BUTTONSIZE_MAX }
 	},
 
 	{	-- Font Size / item count
 		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Item count font size:" },
-		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = ENGINVENTORY_FONTSIZE_MIN },
-		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = ENGINVENTORY_FONTSIZE_MIN, ["maxValue"] = ENGINVENTORY_FONTSIZE_MAX, ["valueStep"] = 1,
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = EngBags_FONTSIZE_MIN },
+		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = EngBags_FONTSIZE_MIN, ["maxValue"] = EngBags_FONTSIZE_MAX, ["valueStep"] = 1,
 		  ["defaultValue"] = function()
-				return EngInventoryConfig["button_size_opts"]["ENGINVENTORY_BUTTONFONTHEIGHT"];
+				return EngInventoryConfig["button_size_opts"]["EngBags_BUTTONFONTHEIGHT"];
 			end,
 		  ["func"] = function(v)
-				EngInventoryConfig["button_size_opts"]["ENGINVENTORY_BUTTONFONTHEIGHT"] = tonumber(v);
+				EngInventoryConfig["button_size_opts"]["EngBags_BUTTONFONTHEIGHT"] = tonumber(v);
 				EngInventory_SetDefaultValues(0);
 				EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
 				EngInventory_UpdateWindow();
 			end
 		},
-		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = ENGINVENTORY_FONTSIZE_MAX }
+		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = EngBags_FONTSIZE_MAX }
 	},
 
 	{	-- Font Size / New text
 		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "New tag font size:" },
-		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = ENGINVENTORY_FONTSIZE_MIN },
-		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = ENGINVENTORY_FONTSIZE_MIN, ["maxValue"] = ENGINVENTORY_FONTSIZE_MAX, ["valueStep"] = 1,
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = EngBags_FONTSIZE_MIN },
+		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = EngBags_FONTSIZE_MIN, ["maxValue"] = EngBags_FONTSIZE_MAX, ["valueStep"] = 1,
 		  ["defaultValue"] = function()
-				return EngInventoryConfig["button_size_opts"]["ENGINVENTORY_BUTTONFONTHEIGHT2"];
+				return EngInventoryConfig["button_size_opts"]["EngBags_BUTTONFONTHEIGHT2"];
 			end,
 		  ["func"] = function(v)
-				EngInventoryConfig["button_size_opts"]["ENGINVENTORY_BUTTONFONTHEIGHT2"] = tonumber(v);
+				EngInventoryConfig["button_size_opts"]["EngBags_BUTTONFONTHEIGHT2"] = tonumber(v);
 				EngInventory_SetDefaultValues(0);
 				EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
 				EngInventory_UpdateWindow();
 			end
 		},
-		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = ENGINVENTORY_FONTSIZE_MAX }
+		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = EngBags_FONTSIZE_MAX }
 	},
 
-	{	-- Font alignment / X
-		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Font position - X:" },
-		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = 0 },
-		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = 0, ["maxValue"] = 10, ["valueStep"] = 1,
-		  ["defaultValue"] = function()
-				return EngInventoryConfig["button_size_opts"]["ENGINVENTORY_BUTTONFONTDISTANCE_X"];
-			end,
-		  ["func"] = function(v)
-				EngInventoryConfig["button_size_opts"]["ENGINVENTORY_BUTTONFONTDISTANCE_X"] = tonumber(v);
-				EngInventory_SetDefaultValues(0);
-				EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
-				EngInventory_UpdateWindow();
-			end
-		},
-		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = 10 }
-	},
-
-	{	-- Font alignment / Y
-		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Font position - Y:" },
-		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = 0 },
-		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = 0, ["maxValue"] = 10, ["valueStep"] = 1,
-		  ["defaultValue"] = function()
-				return EngInventoryConfig["button_size_opts"]["ENGINVENTORY_BUTTONFONTDISTANCE_Y"];
-			end,
-		  ["func"] = function(v)
-				EngInventoryConfig["button_size_opts"]["ENGINVENTORY_BUTTONFONTDISTANCE_Y"] = tonumber(v);
-				EngInventory_SetDefaultValues(0);
-				EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
-				EngInventory_UpdateWindow();
-			end
-		},
-		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = 10 }
-	},
 
 	{	-- Frame spacing / X
 		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Frame spacing - X:" },
@@ -593,6 +423,20 @@ EngInventory_ConfigOptions_Default = {
 		},
 		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = "On" }
 	},
+	{	-- Hook "Bag -2" (KeyRing)
+		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "KeyRing:" },
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = "Off" },
+		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = 0, ["maxValue"] = 1, ["valueStep"] = 1,
+		  ["defaultValue"] = function()
+				return EngInventoryConfig["hook_Bag-2"];
+			end,
+		  ["func"] = function(v)
+				EngInventoryConfig["hook_Bag-2"] = tonumber(v);
+				EngInventory_SetDefaultValues(0);
+			end
+		},
+		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = "On" }
+	},
 
 
 	{	-- Show "Backpack"
@@ -665,6 +509,20 @@ EngInventory_ConfigOptions_Default = {
 		},
 		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = "On" }
 	},
+	{	-- Show "Bag -2" (KeyRing)
+		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Include KeyRing Contents:" },
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = "Off" },
+		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = 0, ["maxValue"] = 1, ["valueStep"] = 1,
+		  ["defaultValue"] = function()
+				return EngInventoryConfig["show_Bag-2"];
+			end,
+		  ["func"] = function(v)
+				EngInventoryConfig["show_Bag-2"] = tonumber(v);
+				EngInventory_SetDefaultValues(0);
+			end
+		},
+		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = "On" }
+	},
 
 
 	{},	---------------------------------------------------------------------------------------
@@ -687,6 +545,61 @@ EngInventory_ConfigOptions_Default = {
 		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = "On" }
 	},
 
+	{	-- Tooltip Mode Setting
+		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Tooltip Mode:" },
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = "Mode 1" },
+		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = 0, ["maxValue"] = 1, ["valueStep"] = 1,
+		  ["defaultValue"] = function()
+				return EngInventoryConfig["tooltip_mode"];
+			end,
+		  ["func"] = function(v)
+				EngInventoryConfig["tooltip_mode"] = tonumber(v);
+			end
+		},
+		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = "Mode 2" }
+	},
+
+	{	-- Alt+Click Auction Setting
+		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Alt+Click Auction:" },
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = "Off" },
+		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = 0, ["maxValue"] = 1, ["valueStep"] = 1,
+		  ["defaultValue"] = function()
+				return EngInventoryConfig["EngBags_AltClick_Auction"];
+			end,
+		  ["func"] = function(v)
+				EngInventoryConfig["EngBags_AltClick_Auction"] = tonumber(v);
+			end
+		},
+		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = "On" }
+	},
+
+	{	-- Alt+Click Trade Setting
+		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Alt+Click Trade:" },
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = "Off" },
+		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = 0, ["maxValue"] = 1, ["valueStep"] = 1,
+		  ["defaultValue"] = function()
+				return EngInventoryConfig["EngBags_AltClick_Trade"];
+			end,
+		  ["func"] = function(v)
+				EngInventoryConfig["EngBags_AltClick_Trade"] = tonumber(v);
+			end
+		},
+		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = "On" }
+	},
+
+	{	-- Alt+Click Mail Setting
+		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.4, ["color"] = { 1,1,0.25 }, ["text"] = "Alt+Click Mail:" },
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "right", ["text"] = "Off" },
+		{ ["type"] = "Slider", ["ID"] = 1, ["width"] = 0.4, ["minValue"] = 0, ["maxValue"] = 1, ["valueStep"] = 1,
+		  ["defaultValue"] = function()
+				return EngInventoryConfig["EngBags_AltClick_Mail"];
+			end,
+		  ["func"] = function(v)
+				EngInventoryConfig["EngBags_AltClick_Mail"] = tonumber(v);
+			end
+		},
+		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.1, ["color"] = { 0,1,0.5 }, ["align"] = "left", ["text"] = "On" }
+	},
 
 	{},	---------------------------------------------------------------------------------------
 	{
@@ -696,7 +609,7 @@ EngInventory_ConfigOptions_Default = {
 	{},	---------------------------------------------------------------------------------------
 	{
 		{ ["type"] = "Text", ["ID"] = 1, ["width"] = 0.025+0.025+0.025 + 0.005, ["color"] = { 1,0,0.25 }, ["text"] = "" },
-		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.20, ["color"] = { 1,0,0.25 }, ["text"] = "Category" },
+		{ ["type"] = "Text", ["ID"] = 2, ["width"] = 0.20, ["color"] = { 1,0,0.25 }, ["text"] = "Catagory" },
 		{ ["type"] = "Text", ["ID"] = 3, ["width"] = 0.20, ["color"] = { 1,0,0.25 }, ["text"] = "Keywords" },
 		{ ["type"] = "Text", ["ID"] = 4, ["width"] = 0.35, ["color"] = { 1,0,0.25 }, ["text"] = "Tooltip Search" },
 		{ ["type"] = "Text", ["ID"] = 5, ["width"] = 0.170, ["color"] = { 1,0,0.25 }, ["text"] = "ItemType" }
@@ -781,34 +694,34 @@ end
 function EngInventory_CalcButtonSize(newsize)
 	local k = "button_size_opts";
 	-- constants
-	ENGINVENTORY_BUTTONFRAME_X_PADDING = 2;
-	ENGINVENTORY_BUTTONFRAME_Y_PADDING = 1;
-	ENGINVENTORY_BUTTONFRAME_BUTTONWIDTH = newsize;
-	ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT = newsize;
-	ENGINVENTORY_BUTTONFRAME_WIDTH = ENGINVENTORY_BUTTONFRAME_BUTTONWIDTH + (ENGINVENTORY_BUTTONFRAME_X_PADDING*2);
-	ENGINVENTORY_BUTTONFRAME_HEIGHT = ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT + (ENGINVENTORY_BUTTONFRAME_Y_PADDING*2);
-	ENGINVENTORY_BKGRFRAME_WIDTH = ENGINVENTORY_BUTTONFRAME_BUTTONWIDTH * 1.6;
-	ENGINVENTORY_BKGRFRAME_HEIGHT = ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT * 1.6;
-	ENGINVENTORY_COOLDOWN_SCALE = 0.02125 * ENGINVENTORY_BUTTONFRAME_BUTTONWIDTH;
+	EngBags_BUTTONFRAME_X_PADDING = 2;
+	EngBags_BUTTONFRAME_Y_PADDING = 1;
+	EngBags_BUTTONFRAME_BUTTONWIDTH = newsize;
+	EngBags_BUTTONFRAME_BUTTONHEIGHT = newsize;
+	EngBags_BUTTONFRAME_WIDTH = EngBags_BUTTONFRAME_BUTTONWIDTH + (EngBags_BUTTONFRAME_X_PADDING*2);
+	EngBags_BUTTONFRAME_HEIGHT = EngBags_BUTTONFRAME_BUTTONHEIGHT + (EngBags_BUTTONFRAME_Y_PADDING*2);
+	EngBags_BKGRFRAME_WIDTH = EngBags_BUTTONFRAME_BUTTONWIDTH * 1.6;
+	EngBags_BKGRFRAME_HEIGHT = EngBags_BUTTONFRAME_BUTTONHEIGHT * 1.6;
+	EngBags_COOLDOWN_SCALE = 0.02125 * EngBags_BUTTONFRAME_BUTTONWIDTH;
 
 	if (EngInventoryConfig[k] == nil) then
 		EngInventoryConfig[k] = {
-			["ENGINVENTORY_BUTTONFONTHEIGHT"] = 0.35 * ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT,
-			["ENGINVENTORY_BUTTONFONTHEIGHT2"] = 0.30 * ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT,
-			["ENGINVENTORY_BUTTONFONTDISTANCE_Y"] = (0.08 * ENGINVENTORY_BUTTONFRAME_WIDTH),
-			["ENGINVENTORY_BUTTONFONTDISTANCE_X"] = (0.10 * ENGINVENTORY_BUTTONFRAME_HEIGHT)
+			["EngBags_BUTTONFONTHEIGHT"] = 0.35 * EngBags_BUTTONFRAME_BUTTONHEIGHT,
+			["EngBags_BUTTONFONTHEIGHT2"] = 0.30 * EngBags_BUTTONFRAME_BUTTONHEIGHT,
+			["ENGINVENTORY_BUTTONFONTDISTANCE_Y"] = (0.08 * EngBags_BUTTONFRAME_WIDTH),
+			["ENGINVENTORY_BUTTONFONTDISTANCE_X"] = (0.10 * EngBags_BUTTONFRAME_HEIGHT)
 		};
 
 		if (newsize == 40) then
-			EngInventoryConfig[k]["ENGINVENTORY_BUTTONFONTHEIGHT"] = 14;
-			EngInventoryConfig[k]["ENGINVENTORY_BUTTONFONTHEIGHT2"] = 12;
+			EngInventoryConfig[k]["EngBags_BUTTONFONTHEIGHT"] = 14;
+			EngInventoryConfig[k]["EngBags_BUTTONFONTHEIGHT2"] = 12;
 			EngInventoryConfig[k]["ENGINVENTORY_BUTTONFONTDISTANCE_Y"] = 2;
 			EngInventoryConfig[k]["ENGINVENTORY_BUTTONFONTDISTANCE_X"] = 5;
 		end
 	end
 
-	ENGINVENTORY_BUTTONFONTHEIGHT = math.ceil(EngInventoryConfig[k]["ENGINVENTORY_BUTTONFONTHEIGHT"]);
-	ENGINVENTORY_BUTTONFONTHEIGHT2 = math.ceil(EngInventoryConfig[k]["ENGINVENTORY_BUTTONFONTHEIGHT2"]);
+	EngBags_BUTTONFONTHEIGHT = math.ceil(EngInventoryConfig[k]["EngBags_BUTTONFONTHEIGHT"]);
+	EngBags_BUTTONFONTHEIGHT2 = math.ceil(EngInventoryConfig[k]["EngBags_BUTTONFONTHEIGHT2"]);
 	ENGINVENTORY_BUTTONFONTDISTANCE_Y = EngInventoryConfig[k]["ENGINVENTORY_BUTTONFONTDISTANCE_Y"];
 	ENGINVENTORY_BUTTONFONTDISTANCE_X = EngInventoryConfig[k]["ENGINVENTORY_BUTTONFONTDISTANCE_X"];
 end
@@ -837,50 +750,16 @@ function EngInventory_Catagories(exclude_list, select_bar)
 end
 
 
-function EngInventory_NumericRange(value, lowest, highest)
-        
-        if (value == nil) then return nil; end
 
-        if (type(value) ~= "number") then
-                value = tonumber(value);
-        end
-
-        if ( (value ~= nil) and (lowest ~= nil) and (value < lowest) ) then
-                value = nil;
-        end
-        if ( (value ~= nil) and (highest ~= nil) and (value > highest) ) then
-                value = nil;
-        end
-
-        return value;
-end
-
-function EngInventory_StringChoices(value, choices_array)
-        local found = 0;
-
-        if (value == nil) then
-                return nil;
-        end
-
-        for key,cvalue in choices_array do
-                if (value == cvalue) then
-                        found = 1;
-                end
-        end
-
-        if (found == 0) then
-                return nil;
-        else
-                return value;
-        end
-end
 
 -- sets a default value in the config if the current value is nil.  Increment "resetversion" to override saved values
 -- and force a new setting.
+
 function EI_SetDefault(varname, defaultvalue, resetversion, cleanupfunction, cleanup_param1, cleanup_param2)
+	EngInventoryConfig = EngBagsConfig["Inventory"][EngBags_PLAYERID];
 	local orig_value = EngInventoryConfig[varname];
 
-if (orig_value == nil) then
+	if (orig_value == nil) then
 		orig_value = "";
 	end
 
@@ -899,8 +778,8 @@ if (orig_value == nil) then
         elseif (EngInventoryConfig[varname.."__version"] == nil) then
                 EngInventoryConfig[varname] = defaultvalue;
         elseif (EngInventoryConfig[varname.."__version"] < resetversion) then
-		EngInventory_PrintDEBUG("old version: "..EngInventoryConfig[varname.."__version"]..", resetversion: "..resetversion);
-                EngInventory_Print( varname.." was reset to it's default value.  Changed from '"..orig_value.."' to "..EngInventoryConfig[varname], 1,0,0 );
+		EngBags_PrintDEBUG("old version: "..EngInventoryConfig[varname.."__version"]..", resetversion: "..resetversion);
+                EngBags_Print( varname.." was reset to it's default value.  Changed from '"..orig_value.."' to "..EngInventoryConfig[varname], 1,0,0 );
                 EngInventoryConfig[varname] = defaultvalue;
         end
 
@@ -936,19 +815,14 @@ function EngInventory_SetClassBars()
 	c[englishClass] = "putinslot--CLASS_ITEMS";
 
 	EngInventoryConfig["putinslot--SOULSHARDS"] = c["WARLOCK"].."1";
-	EngInventoryConfig["putinslot--WARLOCK_REAGENTS"] = c["WARLOCK"].."1";
+	EngInventoryConfig["putinslot--WARLOCK_REAGENTS"] = c["WARLOCK"].."2";
 
-	EngInventoryConfig["putinslot--ROGUE_REAGENTS"] = c["ROGUE"].."1";
+	EngInventoryConfig["putinslot--ROGUE_POISON"] = c["ROGUE"].."1";
+	EngInventoryConfig["putinslot--ROGUE_POWDER"] = c["ROGUE"].."1";
 
-	EngInventoryConfig["putinslot--MAGE_REAGENTS"] = c["MAGE"].."1";
+	EngInventoryConfig["putinslot--MAGE_REAGENT"] = c["MAGE"].."1";
 
 	EngInventoryConfig["putinslot--SHAMAN_REAGENTS"] = c["SHAMAN"].."1";
-
-	EngInventoryConfig["putinslot--PRIEST_REAGENTS"] = c["PRIEST"].."1";
-
-	EngInventoryConfig["putinslot--DRUID_REAGENTS"] = c["DRUID"].."1";
-
-	EngInventoryConfig["putinslot--PALADIN_REAGENTS"] = c["PALADIN"].."1";
 end
 
 -- set "re" to 1 to restore all default values
@@ -960,213 +834,160 @@ function EngInventory_SetDefaultValues(re)
                 EngInventoryConfig = { ["configVersion"] = current_config_version };
         end
 
-        EI_SetDefault("maxColumns", 10, 1+re, EngInventory_NumericRange, ENGINVENTORY_MAXCOLUMNS_MIN,ENGINVENTORY_MAXCOLUMNS_MAX);
+	EI_SetDefault("tooltip_mode", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("EngBags_AltClick_Auction", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("EngBags_AltClick_Trade", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("EngBags_AltClick_Mail", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("hide_bag_icons", 0, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("hide_keyring_empty_slots", 0, 1+re, EngBags_NumericRange, 0, 1);
 
-        EI_SetDefault("moveLock", 1, 1+re, EngInventory_NumericRange, 0,1);
+        EI_SetDefault("maxColumns", 9, 1+re, EngBags_NumericRange, EngBags_MAXCOLUMNS_MIN,EngBags_MAXCOLUMNS_MAX);
 
-	EI_SetDefault("hook_OpenAllBags", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("hook_Bag0", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("hook_Bag1", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("hook_Bag2", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("hook_Bag3", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("hook_Bag4", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("show_Bag0", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("show_Bag1", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("show_Bag2", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("show_Bag3", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("show_Bag4", 1, 1+re, EngInventory_NumericRange, 0, 1);
+        EI_SetDefault("moveLock", 1, 1+re, EngBags_NumericRange, 0,1);
 
-        EI_SetDefault("frameWindowScale", 1.0, 1+re, EngInventory_NumericRange, 0.64, 1.0);
-	EI_SetDefault("frameButtonSize", 40, 1+re, EngInventory_NumericRange, 15, 80);
+	EI_SetDefault("hook_OpenAllBags", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("hook_Bag0", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("hook_Bag1", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("hook_Bag2", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("hook_Bag3", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("hook_Bag4", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("hook_Bag-2", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("show_Bag0", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("show_Bag1", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("show_Bag2", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("show_Bag3", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("show_Bag4", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("show_Bag-2", 1, 1+re, EngBags_NumericRange, 0, 1);
+
+        EI_SetDefault("frameWindowScale", 0.64, 1+re, EngBags_NumericRange, 0.64, 1.0);
+	EI_SetDefault("frameButtonSize", 40, 1+re, EngBags_NumericRange, 15, 80);
 
 	EngInventory_CalcButtonSize(EngInventoryConfig["frameButtonSize"]);
 
-        EI_SetDefault("frameLEFT", UIParent:GetRight() * UIParent:GetScale() * 0.5, 2+re, EngInventory_NumericRange);
-        EI_SetDefault("frameRIGHT", UIParent:GetRight() * UIParent:GetScale() * 0.975, 2+re, EngInventory_NumericRange);
-        EI_SetDefault("frameTOP", UIParent:GetTop() * UIParent:GetScale() * 0.90, 2+re, EngInventory_NumericRange);
-        EI_SetDefault("frameBOTTOM", UIParent:GetTop() * UIParent:GetScale() * 0.19, 2+re, EngInventory_NumericRange);
-        EI_SetDefault("frameXRelativeTo", "RIGHT", 1+re, EngInventory_StringChoices, {"RIGHT","LEFT"} );
-        EI_SetDefault("frameYRelativeTo", "BOTTOM", 1+re, EngInventory_StringChoices, {"TOP","BOTTOM"} );
+        EI_SetDefault("frameLEFT", UIParent:GetRight() * UIParent:GetScale() * 0.5, 2+re, EngBags_NumericRange);
+        EI_SetDefault("frameRIGHT", UIParent:GetRight() * UIParent:GetScale() * 0.975, 2+re, EngBags_NumericRange);
+        EI_SetDefault("frameTOP", UIParent:GetTop() * UIParent:GetScale() * 0.90, 2+re, EngBags_NumericRange);
+        EI_SetDefault("frameBOTTOM", UIParent:GetTop() * UIParent:GetScale() * 0.19, 2+re, EngBags_NumericRange);
+        EI_SetDefault("frameXRelativeTo", "RIGHT", 1+re, EngBags_StringChoices, {"RIGHT","LEFT"} );
+        EI_SetDefault("frameYRelativeTo", "BOTTOM", 1+re, EngBags_StringChoices, {"TOP","BOTTOM"} );
 
-	EI_SetDefault("frameXSpace", 5, 1+re, EngInventory_NumericRange, 0, 20);
-        EI_SetDefault("frameYSpace", 5, 1+re, EngInventory_NumericRange, 0, 20);
+	EI_SetDefault("frameXSpace", 5, 1+re, EngBags_NumericRange, 0, 20);
+        EI_SetDefault("frameYSpace", 5, 1+re, EngBags_NumericRange, 0, 20);
 
-	EI_SetDefault("show_top_graphics", 1, 1+re, EngInventory_NumericRange, 0, 1);
-	EI_SetDefault("build_trade_list", 0, 1+re, EngInventory_NumericRange, 0, 1);
+	EI_SetDefault("show_top_graphics", 1, 1+re, EngBags_NumericRange, 0, 1);
+	EI_SetDefault("build_trade_list", 0, 1+re, EngBags_NumericRange, 0, 1);
 
         EI_SetDefault("newItemText", "*New*", 1+re);
         EI_SetDefault("newItemTextPlus", "++", 1+re);
         EI_SetDefault("newItemTextMinus", "--", 1+re);
 	EI_SetDefault("newItemText_Off", "", 1+re);
-        EI_SetDefault("newItemTimeout", 60*60*3 , 1+re, EngInventory_NumericRange);     -- 3 hours for an item to lose "new" status
-        EI_SetDefault("newItemTimeout2", 60*10 , 1+re, EngInventory_NumericRange);      -- 10 minutes
-        EI_SetDefault("newItemColor1_R", 0.9 , 1+re, EngInventory_NumericRange, 0, 1.0);
-        EI_SetDefault("newItemColor1_G", 0.9 , 1+re, EngInventory_NumericRange, 0, 1.0);
-        EI_SetDefault("newItemColor1_B", 0.2 , 1+re, EngInventory_NumericRange, 0, 1.0);
-        EI_SetDefault("newItemColor2_R", 0.0 , 1+re, EngInventory_NumericRange, 0, 1.0);
-        EI_SetDefault("newItemColor2_G", 1.0 , 1+re, EngInventory_NumericRange, 0, 1.0);
-        EI_SetDefault("newItemColor2_B", 0.4 , 1+re, EngInventory_NumericRange, 0, 1.0);
+        EI_SetDefault("newItemTimeout", 60*60*3 , 1+re, EngBags_NumericRange);     -- 3 hours for an item to lose "new" status
+        EI_SetDefault("newItemTimeout2", 60*10 , 1+re, EngBags_NumericRange);      -- 10 minutes
+        EI_SetDefault("newItemColor1_R", 0.9 , 1+re, EngBags_NumericRange, 0, 1.0);
+        EI_SetDefault("newItemColor1_G", 0.9 , 1+re, EngBags_NumericRange, 0, 1.0);
+        EI_SetDefault("newItemColor1_B", 0.2 , 1+re, EngBags_NumericRange, 0, 1.0);
+        EI_SetDefault("newItemColor2_R", 0.0 , 1+re, EngBags_NumericRange, 0, 1.0);
+        EI_SetDefault("newItemColor2_G", 1.0 , 1+re, EngBags_NumericRange, 0, 1.0);
+        EI_SetDefault("newItemColor2_B", 0.4 , 1+re, EngBags_NumericRange, 0, 1.0);
 
-	for i = 1, ENGINVENTORY_MAINWINDOWCOLORIDX do
-		EI_SetDefault("bar_colors_"..i.."_background_r", 0.15, 1+re, EngInventory_NumericRange, 0, 1.0); -- default r 0
-		EI_SetDefault("bar_colors_"..i.."_background_g", 0.15, 1+re, EngInventory_NumericRange, 0, 1.0); -- default g 0.25
-		EI_SetDefault("bar_colors_"..i.."_background_b", 0.15, 1+re, EngInventory_NumericRange, 0, 1.0); -- default b 0.5
-		EI_SetDefault("bar_colors_"..i.."_background_a", 0.5, 1+re, EngInventory_NumericRange, 0, 1.0); -- default a 0.5
+	for i = 1, EngBags_MAINWINDOWCOLORIDX do
+		EI_SetDefault("bar_colors_"..i.."_background_r", 0.0, 1+re, EngBags_NumericRange, 0, 1.0);
+		EI_SetDefault("bar_colors_"..i.."_background_g", 0.25, 1+re, EngBags_NumericRange, 0, 1.0);
+		EI_SetDefault("bar_colors_"..i.."_background_b", 0.5, 1+re, EngBags_NumericRange, 0, 1.0);
+		EI_SetDefault("bar_colors_"..i.."_background_a", 0.5, 1+re, EngBags_NumericRange, 0, 1.0);
 
-		EI_SetDefault("bar_colors_"..i.."_border_r", 0.0, 1+re, EngInventory_NumericRange, 0, 1.0); -- default r 0
-		EI_SetDefault("bar_colors_"..i.."_border_g", 0.0, 1+re, EngInventory_NumericRange, 0, 1.0); -- default g 0.5
-		EI_SetDefault("bar_colors_"..i.."_border_b", 0.0, 1+re, EngInventory_NumericRange, 0, 1.0); -- default b 1.0
-		EI_SetDefault("bar_colors_"..i.."_border_a", 0.67, 1+re, EngInventory_NumericRange, 0, 1.0); -- default a 0.5
+		EI_SetDefault("bar_colors_"..i.."_border_r", 0.0, 1+re, EngBags_NumericRange, 0, 1.0);
+		EI_SetDefault("bar_colors_"..i.."_border_g", 0.5, 1+re, EngBags_NumericRange, 0, 1.0);
+		EI_SetDefault("bar_colors_"..i.."_border_b", 1.0, 1+re, EngBags_NumericRange, 0, 1.0);
+		EI_SetDefault("bar_colors_"..i.."_border_a", 0.5, 1+re, EngBags_NumericRange, 0, 1.0);
 	end
 
 	EngInventory_SetClassBars();
 
-	-- default slot locations for items
+        -- default slot locations for items
+	EI_SetDefault("putinslot--CLASS_ITEMS1", 15, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        --EI_SetDefault("putinslot--SOULSHARDS", 15, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--EMPTY_PROJECTILE_SLOTS", 15, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--USED_PROJECTILE_SLOTS", 15, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--PROJECTILE", 14, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);          -- arrows and bullets that AREN'T in your shot bags
+        EI_SetDefault("putinslot--EMPTY_SLOTS", 13, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);         -- Empty slots go in this bar
+        EI_SetDefault("putinslot--SHARD_EMPTY_SLOTS", 13, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);         -- Empty slots go in this bar
+        EI_SetDefault("putinslot--ENCHANT_EMPTY_SLOTS", 13, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);         -- Empty slots go in this bar
+        EI_SetDefault("putinslot--HERB_EMPTY_SLOTS", 13, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);         -- Empty slots go in this bar
+        EI_SetDefault("putinslot--ARROW_EMPTY_SLOTS", 13, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);         -- Empty slots go in this bar
+        EI_SetDefault("putinslot--AMMO_EMPTY_SLOTS", 13, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);         -- Empty slots go in this bar
+        EI_SetDefault("putinslot--GRAY_ITEMS", 13, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);          -- Gray items go in this bar
+        --
+        EI_SetDefault("putinslot--OTHERORUNKNOWN", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);      -- if not soulbound, but doesn't match any other catagory, it goes here
+        EI_SetDefault("putinslot--TRADEGOODS", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	--EI_SetDefault("putinslot--NON_CLASS_ITEMS1", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--RECIPE", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--PATTERN", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--SCHEMATIC", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--FORMULA", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--TRADESKILL_COOKING", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--TRADESKILL_FIRSTAID", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	--EI_SetDefault("putinslot--NON_CLASS_ITEMS2", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--OTHERSOULBOUND", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);       -- this will usually be soulbound equipment
+	EI_SetDefault("putinslot--CUSTOM_01", 10, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--CUSTOM_02", 10, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--CUSTOM_03", 10, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--CUSTOM_04", 10, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--CUSTOM_05", 10, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--CUSTOM_06", 10, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	--
+        EI_SetDefault("putinslot--CONSUMABLE", 9, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--TRADESKILL_2", 8, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--TRADESKILL_1", 8, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--TRADESKILL_2_CREATED", 8, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--TRADESKILL_1_CREATED", 8, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--EQUIPPED", 7, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        --
+        EI_SetDefault("putinslot--FOOD", 6, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--DRINK", 5, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--QUESTITEMS", 4, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        --
+        EI_SetDefault("putinslot--HEALINGPOTION", 3, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--HEALTHSTONE", 3, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--MANAPOTION", 2, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--BANDAGE", 1, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--REAGENT", 1, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--JUJU", 1, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--MISC", 1, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--TRADETOOLS", 1, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--MINIPET", 1, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--HEARTH", 1, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+        EI_SetDefault("putinslot--KEYS", 1, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--CLASS_ITEMS2", 1, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
 
-	EI_SetDefault("putinslot--EXPLOSIVE", 15, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--CUSTOM_01", 15, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--CUSTOM_02", 15, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--CUSTOM_03", 15, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--CUSTOM_04", 15, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--CUSTOM_05", 15, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--CUSTOM_06", 15, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
+	-- NEW EQUIP SORTING
+	EI_SetDefault("putinslot--BOP_BOE", 12, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPSHIRT", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPSHOULDER", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPLEGS", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPFEET", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPFINGER", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPWRIST", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPTABARD", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPBACK", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPCHEST", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPHEAD", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPNECK", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPHANDS", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPWAIST", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPTRINKET", 11, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPFIRERESIST", 7, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPFROSTRESIST", 7, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPSHADOWRESIST", 7, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPNATURERESIST", 7, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
+	EI_SetDefault("putinslot--EQUIPARCANERESIST", 7, 1+re, EngBags_NumericRange, 1, EngBags_MAX_BARS);
 
-	EI_SetDefault("putinslot--EMPTY_PROJECTILE_SLOTS", 14, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS); -- quiver and ammo bag empty slots
-	EI_SetDefault("putinslot--USED_PROJECTILE_SLOTS", 14, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS); -- quiver and ammo bag used slots
-	EI_SetDefault("putinslot--SOULSHARDS", 14, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	
-	EI_SetDefault("putinslot--EMPTY_SLOTS", 13, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);         -- Empty slots go in this bar
-	EI_SetDefault("putinslot--GRAY_ITEMS", 13, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);          -- Gray items go in this bar
-
-----------
-
-	EI_SetDefault("putinslot--BOE", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--CLASSBOOK", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--FORMULA", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--MANUAL", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--PATTERN", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--PLANS", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--RECIPE", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--SCHEMATIC", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--REAGENT", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TRADEGOODS", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TRADESKILL_COOKING", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TRADESKILL_FIRSTAID", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	--EI_SetDefault("putinslot--NON_CLASS_ITEMS1", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	--EI_SetDefault("putinslot--NON_CLASS_ITEMS2", 12, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-
-	EI_SetDefault("putinslot--TRADESKILL_1", 11, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TRADESKILL_2", 11, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TRADESKILL_1_CREATED", 11, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TRADESKILL_2_CREATED", 11, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-
-	EI_SetDefault("putinslot--OTHERSOULBOUND", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);       -- this will usually be soulbound equipment	
-	EI_SetDefault("putinslot--OTHERSOULBOUND_01_HEAD", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_02_NECK", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_03_SHOULDER", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_04_BACK", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_05_CHEST", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_06_SHIRT", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_07_TABARD", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_08_WRIST", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_09_HANDS", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_10_WAIST", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_11_LEGS", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_12_FEET", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_13_FINGER", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_14_TRINKET", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_15_MAINHAND", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_16_ONEHAND", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_17_OFFHAND", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_18_TWOHAND", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERSOULBOUND_19_RANGED", 10, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	
-----------
-
-	EI_SetDefault("putinslot--ROGUE_POISON", 9, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--WEAPON_BUFF", 9, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-
-	EI_SetDefault("putinslot--KEYS_1_OTHER", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS); -- items which act as keys
-	EI_SetDefault("putinslot--MISC", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--OTHERORUNKNOWN", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);      -- if not soulbound, but doesn't match any other category, it goes here
-	EI_SetDefault("putinslot--QUESTITEMS", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_1", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_1_AHNQIRAJ", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS); -- Ahn'Qiraj scarabs are used for both Cenarion Circle & Brood of Nozdormu factions
-	EI_SetDefault("putinslot--TOKEN_1_ARGENTDAWN", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_1_BLASTEDLANDS", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_1_CENARIONCIRCLE", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_1_FELWOOD", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_1_THORIUMBROTHERHOOD", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_1_UNGOROCRATER", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_1_WINTERSPRING", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_1_ZANDALARTRIBE", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_BATTLEGROUND", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_LOVEISINTHEAIR_1", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_LOVEISINTHEAIR_2", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TOKEN_LOVEISINTHEAIR_3", 8, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	
-	EI_SetDefault("putinslot--EQUIPPED", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_01_HEAD", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_02_NECK", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_03_SHOULDER", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_04_BACK", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_05_CHEST", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_06_SHIRT", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_07_TABARD", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_08_WRIST", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_09_HANDS", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_10_WAIST", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_11_LEGS", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_12_FEET", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_13_FINGER", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_14_TRINKET", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_15_MAINHAND", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_16_ONEHAND", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_17_OFFHAND", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_18_TWOHAND", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--EQUIPPED_19_RANGED", 7, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	
-----------
-	
-	EI_SetDefault("putinslot--ELIXIR", 6, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--ELIXIR_BLASTEDLANDS", 6, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--ELIXIR_SOULBOUND", 6, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--ELIXIR_ZANZA", 6, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-
-	EI_SetDefault("putinslot--BANDAGE", 5, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--CONSUMABLE", 5, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--JUJU", 5, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-
-	EI_SetDefault("putinslot--POTION", 4, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--RUNE", 4, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-
-----------
-
-	EI_SetDefault("putinslot--DRINK", 3, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);	
-	EI_SetDefault("putinslot--FOOD", 3, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-
-	EI_SetDefault("putinslot--CLASS_ITEMS1", 2, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--PROJECTILE", 2, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS); -- arrows and bullets that AREN'T in your quiver and/or ammo bag
-
-	EI_SetDefault("putinslot--CLASS_ITEMS2", 1, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--HEARTH", 1, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--KEYS", 1, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS); -- keyring support not implemented in EngInventory
-	EI_SetDefault("putinslot--KEYS_1", 1, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS); -- keyring support not implemented in EngInventory
-	EI_SetDefault("putinslot--MINIPET", 1, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--MOUNT", 1, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-	EI_SetDefault("putinslot--TRADETOOLS", 1, 1+re, EngInventory_NumericRange, 1, ENGINVENTORY_MAX_BARS);
-
-	-- okay, I defined too many catagories...  Time to cleanup the config:
-
-	--EngInventoryConfig = EngInventory_Table_RemoveKey(EngInventoryConfig, "putinslot--RECIPE" );
-	--EngInventoryConfig = EngInventory_Table_RemoveKey(EngInventoryConfig, "putinslot--SCHEMATIC" );
-	--EngInventoryConfig = EngInventory_Table_RemoveKey(EngInventoryConfig, "putinslot--PATTERN" );
 
         -- default item overrides
-	EI_SetDefault("itemoverride_loaddefaults", 1, 3+re, EngInventory_NumericRange, 0, 1);
+	EI_SetDefault("itemoverride_loaddefaults", 1, 3+re, EngBags_NumericRange, 0, 1);
 	if (EngInventoryConfig["itemoverride_loaddefaults"] == 1) then
-		EngInventoryConfig["item_overrides"] = EngInventory_DefaultItemOverrides;
-		EngInventoryConfig["item_search_list"] = EngInventory_DefaultSearchList;
+		EngInventoryConfig["item_overrides"] = EngBags_DefaultItemOverrides;
+		EngInventoryConfig["item_search_list"] = EngBags_DefaultSearchList;
 
 		for key,value in EngInventoryConfig["item_search_list"] do
 			if (string.sub(value[4], 1, 5) == "loc::") then
@@ -1175,7 +996,7 @@ function EngInventory_SetDefaultValues(re)
 		end
 
 		for key,value in EILocal["string_searches"] do
-			table.insert(EngInventoryConfig["item_search_list"], EngInventory_DefaultSearchItemsINSERTTO,
+			table.insert(EngInventoryConfig["item_search_list"], EngBags_DefaultSearchItemsINSERTTO,
 				{ value[1], "", value[2], "" } );
 		end
 
@@ -1186,34 +1007,33 @@ function EngInventory_SetDefaultValues(re)
 	newEngInventoryConfig = EngInventoryConfig;
 	for key,value in EngInventoryConfig do
 		if (string.find(key, "itemoverride--")) then
-			newEngInventoryConfig = EngInventory_Table_RemoveKey(newEngInventoryConfig, key);
+			newEngInventoryConfig = EngBags_Table_RemoveKey(newEngInventoryConfig, key);
 		end
 	end
 	EngInventoryConfig = newEngInventoryConfig;
 
         -- default sort views / default "allow new items in bar" settings
-        EI_SetDefault("bar_sort_"..EngInventoryConfig["putinslot--EMPTY_SLOTS"], ENGINVENTORY_SORTBYNAMEREV, 2+re, EngInventory_NumericRange, ENGINVENTORY_SORTLOWESTVALUE, ENGINVENTORY_SORTHIGHESTVALUE);
-        --EI_SetDefault("bar_sort_"..EngInventoryConfig["putinslot--HEALINGPOTION"], ENGINVENTORY_SORTBYNAMEREV, 2+re, EngInventory_NumericRange, ENGINVENTORY_SORTLOWESTVALUE, ENGINVENTORY_SORTHIGHESTVALUE);
-        --EI_SetDefault("bar_sort_"..EngInventoryConfig["putinslot--MANAPOTION"], ENGINVENTORY_SORTBYNAMEREV, 2+re, EngInventory_NumericRange, ENGINVENTORY_SORTLOWESTVALUE, ENGINVENTORY_SORTHIGHESTVALUE);
-        EI_SetDefault("bar_sort_"..EngInventoryConfig["putinslot--ELIXIR"], ENGINVENTORY_SORTBYNAMEREV, 2+re, EngInventory_NumericRange, ENGINVENTORY_SORTLOWESTVALUE, ENGINVENTORY_SORTHIGHESTVALUE);
-        EI_SetDefault("bar_sort_"..EngInventoryConfig["putinslot--POTION"], ENGINVENTORY_SORTBYNAMEREV, 2+re, EngInventory_NumericRange, ENGINVENTORY_SORTLOWESTVALUE, ENGINVENTORY_SORTHIGHESTVALUE);
- 		EI_SetDefault("bar_sort_"..EngInventoryConfig["putinslot--TRADEGOODS"], ENGINVENTORY_SORTBYNAMEREV, 2+re, EngInventory_NumericRange, ENGINVENTORY_SORTLOWESTVALUE, ENGINVENTORY_SORTHIGHESTVALUE);
+        EI_SetDefault("bar_sort_"..EngInventoryConfig["putinslot--EMPTY_SLOTS"], EngBags_SORTBYNAMEREV, 2+re, EngBags_NumericRange, EngBags_SORTLOWESTVALUE, EngBags_SORTHIGHESTVALUE);
+        EI_SetDefault("bar_sort_"..EngInventoryConfig["putinslot--HEALINGPOTION"], EngBags_SORTBYNAMEREV, 2+re, EngBags_NumericRange, EngBags_SORTLOWESTVALUE, EngBags_SORTHIGHESTVALUE);
+        EI_SetDefault("bar_sort_"..EngInventoryConfig["putinslot--MANAPOTION"], EngBags_SORTBYNAMEREV, 2+re, EngBags_NumericRange, EngBags_SORTLOWESTVALUE, EngBags_SORTHIGHESTVALUE);
+        EI_SetDefault("bar_sort_"..EngInventoryConfig["putinslot--TRADEGOODS"], EngBags_SORTBYNAMEREV, 2+re, EngBags_NumericRange, EngBags_SORTLOWESTVALUE, EngBags_SORTHIGHESTVALUE);
 
-	--EI_SetDefault("allow_new_in_bar_"..EngInventoryConfig["putinslot--HEALINGPOTION"], 0, 1+re, EngInventory_NumericRange, 0, 1);
-	--EI_SetDefault("allow_new_in_bar_"..EngInventoryConfig["putinslot--MANAPOTION"], 0, 1+re, EngInventory_NumericRange, 0, 1);
-	--EI_SetDefault("allow_new_in_bar_"..EngInventoryConfig["putinslot--FOOD"], 0, 1+re, EngInventory_NumericRange, 0, 1);
-	--EI_SetDefault("allow_new_in_bar_"..EngInventoryConfig["putinslot--DRINK"], 0, 1+re, EngInventory_NumericRange, 0, 1);
-	--EI_SetDefault("allow_new_in_bar_"..EngInventoryConfig["putinslot--SOULSHARDS"], 0, 1+re, EngInventory_NumericRange, 0, 1);
+	--EI_SetDefault("allow_new_in_bar_"..EngInventoryConfig["putinslot--HEALINGPOTION"], 0, 1+re, EngBags_NumericRange, 0, 1);
+	--EI_SetDefault("allow_new_in_bar_"..EngInventoryConfig["putinslot--MANAPOTION"], 0, 1+re, EngBags_NumericRange, 0, 1);
+	--EI_SetDefault("allow_new_in_bar_"..EngInventoryConfig["putinslot--FOOD"], 0, 1+re, EngBags_NumericRange, 0, 1);
+	--EI_SetDefault("allow_new_in_bar_"..EngInventoryConfig["putinslot--DRINK"], 0, 1+re, EngBags_NumericRange, 0, 1);
+	--EI_SetDefault("allow_new_in_bar_"..EngInventoryConfig["putinslot--SOULSHARDS"], 0, 1+re, EngBags_NumericRange, 0, 1);
 
-	for i = 1, ENGINVENTORY_MAX_BARS do
-                EI_SetDefault("bar_sort_"..i, ENGINVENTORY_SORTBYNAME, 2+re, EngInventory_NumericRange, ENGINVENTORY_SORTLOWESTVALUE, ENGINVENTORY_SORTHIGHESTVALUE);
-		EI_SetDefault("allow_new_in_bar_"..i, 1, 1+re, EngInventory_NumericRange, 0, 1);
+	for i = 1, EngBags_MAX_BARS do
+                EI_SetDefault("bar_sort_"..i, EngBags_SORTBYNAME, 2+re, EngBags_NumericRange, EngBags_SORTLOWESTVALUE, EngBags_SORTHIGHESTVALUE);
+		EI_SetDefault("allow_new_in_bar_"..i, 1, 1+re, EngBags_NumericRange, 0, 1);
+		EI_SetDefault("hide_items_in_bar_"..i, 0, 1+re, EngBags_NumericRange, 0, 1);
 	end
 
 	-- find matching catagories that are not assigned
 	for key,value in EngInventoryConfig["item_search_list"] do
 		if (EngInventoryConfig["putinslot--"..value[1]] == nil) then
-			message("EngInventory: Unassigned category: "..value[1].." -- It has been assigned to slot 1");
+			message("EngInventory: Unassigned catagory: "..value[1].." -- It has been assigned to slot 1");
 			EngInventoryConfig["putinslot--"..value[1]] = 1;
 		end
 	end
@@ -1229,7 +1049,7 @@ function EngInventory_SetTradeSkills()
 	ENGINVENTORY_TRADE1 = "";
 	ENGINVENTORY_TRADE2 = "";
 
-	for k,v in EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] do
+	for k,v in EngBagsConfig[EngBags_PLAYERID]["tradeskills"] do
 		if ((k ~= EILocal["Cooking"]) and (k ~= EILocal["First Aid"])) then
 			ENGINVENTORY_TRADE1 = ENGINVENTORY_TRADE2;
 			ENGINVENTORY_TRADE2 = k;
@@ -1238,7 +1058,21 @@ function EngInventory_SetTradeSkills()
 end
 
 function EngInventory_init()
-	ENGINVENTORY_PLAYERID = UnitName("player").." of "..GetCVar("realmName");
+
+	if ( EngBagsItems[EngBags_PLAYERID] == nil) then
+		EngBagsItems[EngBags_PLAYERID] = {};
+	end
+
+	-- Trying to clean the inventory cache on load to see if it fix some things ...
+	-- Tested and works, the time to repopulate the inventory on load isnt a critical thing...
+	-- FIX: Only reset bags 0 to 4 to prevent cleaning the bank cache.
+	-- NOTE: Added keyring support.
+	EngBagsItems[EngBags_PLAYERID][KEYRING_CONTAINER] = {};
+	EngBagsItems[EngBags_PLAYERID][0] = {};
+	EngBagsItems[EngBags_PLAYERID][1] = {};
+	EngBagsItems[EngBags_PLAYERID][2] = {};
+	EngBagsItems[EngBags_PLAYERID][3] = {};
+	EngBagsItems[EngBags_PLAYERID][4] = {};
 
 	-- change imported from auctioneer team..  what does it do?
 	UIPanelWindows["EngInventory_frame"] = { area = "left", pushable = 6 };
@@ -1260,7 +1094,7 @@ function EngInventory_init()
                 EngInventory_load_Localization("DE");
         else
                 -- have to load something...  :(
-                --EngInventory_Print("*** No localization found, stuff won't work properly ***", 1,0.25,0.25 );
+                --EngBags_Print("*** No localization found, stuff won't work properly ***", 1,0.25,0.25 );
 		message("EngInventory: No localization found, stuff won't work properly");
                 EngInventory_load_Localization("EN");
         end
@@ -1270,32 +1104,36 @@ function EngInventory_init()
         SLASH_ENGINVENTORY1 = "/einv";
         SLASH_ENGINVENTORY2 = "/ei";
 
+	if ( EngBagsConfig["Inventory"][EngBags_PLAYERID] == nil ) then
+		EngBagsConfig["Inventory"][EngBags_PLAYERID] = {};
+	end
+
         -- load default values
         EngInventory_SetDefaultValues(0);
         
 	-- go through the tradeskill list, and remove what shouldn't be there
 	-- bah, do it in a lazy way, just wipe it
-	if (EngInventoryConfig[ENGINVENTORY_PLAYERID] == nil) then
-		EngInventoryConfig[ENGINVENTORY_PLAYERID] = {};
+	if (EngBagsConfig[EngBags_PLAYERID] == nil) then
+		EngBagsConfig[EngBags_PLAYERID] = {};
 	end
-	if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] == nil) then
-		EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] = {};
+	if (EngBagsConfig[EngBags_PLAYERID]["tradeskills"] == nil) then
+		EngBagsConfig[EngBags_PLAYERID]["tradeskills"] = {};
 	end
 	local max_skills = 2;
-	if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"][EILocal["Cooking"]] ~= nil) then
+	if (EngBagsConfig[EngBags_PLAYERID]["tradeskills"][EILocal["Cooking"]] ~= nil) then
 		max_skills = max_skills + 1;
 	end
-	if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"][EILocal["First Aid"]] ~= nil) then
+	if (EngBagsConfig[EngBags_PLAYERID]["tradeskills"][EILocal["First Aid"]] ~= nil) then
 		max_skills = max_skills + 1;
 	end
-	if (table.getn(EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"]) > max_skills) then
-		EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] = {};	-- wipe it out
-		EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"] = {};
+	if (table.getn(EngBagsConfig[EngBags_PLAYERID]["tradeskills"]) > max_skills) then
+		EngBagsConfig[EngBags_PLAYERID]["tradeskills"] = {};	-- wipe it out
+		EngBagsConfig[EngBags_PLAYERID]["tradeskill_items"] = {};
 	end
 
 	-- detailed info about tradeskills
-	if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"] == nil) then
-		EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"] = {};
+	if (EngBagsConfig[EngBags_PLAYERID]["trades"] == nil) then
+		EngBagsConfig[EngBags_PLAYERID]["trades"] = {};
 	end
 
 	EngInventory_SetTradeSkills();
@@ -1314,414 +1152,79 @@ function EngInventory_init()
         end
 
 	EngInventory_OnEvent("UPDATE_INVENTORY_ALERTS");	-- reload the items currently equipped
-end
 
-function EngInventory_ExtractTooltip(tooltipframe)
-	local txt_left, txt_right, frame_left, frame_right, idx, out, tt_hack;
+	-- Force update item cache.
+	EngInventory_Update_item_cache();
 
-	tt_hack = getglobal(tooltipframe);
-	tt_hack:SetOwner(UIParent, "ANCHOR_NONE");	-- this makes sure that tooltip.valid = true
-
-	out = {};
-
-	for idx = 1, getglobal(tooltipframe):NumLines() do
-		frame_left = getglobal(tooltipframe.."TextLeft"..idx);
-		frame_right = getglobal(tooltipframe.."TextRight"..idx);
-
-		out[idx] = {
-			["l"] = frame_left:GetText(),
-			["r"] = frame_right:GetText()
-			};
-
-		if ( not frame_left:IsVisible() ) then
-			out[idx]["l"] = "";
-		end
-		if ( not frame_right:IsVisible() ) then
-			out[idx]["r"] = "";
-		end
-
-		if (ENGINVENTORY_ENABLE_GETTEXTCOLOR) then
-			if (out[idx]["l"] ~= nil) then
-				out[idx]["lr"],
-				out[idx]["lg"],
-				out[idx]["lb"] = frame_left:GetTextColor();
-			end
-			if (out[idx]["r"] ~= nil) then
-				out[idx]["rr"],
-				out[idx]["rg"],
-				out[idx]["rb"] = frame_right:GetTextColor();
-			end
-		end
+	if ( CT_Mail_newTradeFrameShow == nil ) then
+		EngInventory_oldTradeFrameShow = TradeFrame:GetScript("OnShow");
+		TradeFrame:SetScript("OnShow", EngInventory_newTradeFrameShow);
 	end
 
-	return out;
 end
 
-function EngInventory_OnEvent__old(event)
-
-        EngInventory_PrintDEBUG("event: '"..event.."'");
-
-        if ( event == "BAG_UPDATE" ) then
-                EngInventory_UpdateWindow();
-        elseif ( event == "BAG_UPDATE_COOLDOWN" ) then
-                EngInventory_UpdateWindow();
-        elseif ( event == "ITEM_LOCK_CHANGED" ) then
-                EngInventory_UpdateWindow();
-	elseif ( event == "CRAFT_SHOW" ) then
-		-- load craft info (Enchanting)
-		if (GetNumCrafts() > 0) then
-			local craftName, craftSubSpellName, craftType, numAvailable, isExpanded;
-			local craftItemLink;
-			local tradeskillName, currentLevel, maxLevel = GetCraftDisplaySkillLine();
-			local a,b,c,d;
-			local reagentItemLink;
-
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID] = {};
-			end
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] = {};
-			end
-			EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"][tradeskillName] = date("%y%m%d%H%M%S");
-			EngInventory_SetTradeSkills();
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"] = {};
-			end
-			if ( EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"] == nil ) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"] = {};
-			end
-
-			for i = 1, GetNumCrafts() do
-				craftName, craftSubSpellName, craftType, numAvailable, isExpanded = GetCraftInfo(i);
-				craftItemLink = GetCraftItemLink(i);
-				if ( (craftItemLink ~= nil) and (type(craftItemLink) == "string") ) then
-					for a,b,c,d in string.gfind(craftItemLink, "(%d+):(%d+):(%d+):(%d+)") do
-						craftItemLink = ""..a..":0:"..c..":0";
-					end
-
-					if ( EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink] == nil ) then
-						EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink] = {};
-					end
-					EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink][tradeskillName] = 1;
-				end
-
-				if (GetCraftNumReagents(i) > 0) then
-					for i2 = 1, GetCraftNumReagents(i) do
-						reagentItemLink = GetCraftReagentItemLink(i,i2);
-						if (reagentItemLink ~= nil) then
-							for a,b,c,d in string.gfind(reagentItemLink, "(%d+):(%d+):(%d+):(%d+)") do
-								reagentItemLink = ""..a..":0:"..c..":0";
-							end						
-							
-							if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink] == nil) then
-								EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink] = {};
-							end
-							EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink][tradeskillName] = 1;
-						end
-					end
-				end
-			end
-		end
-	elseif ( event == "TRADE_SKILL_SHOW" ) then
-		-- load tradeskill info (every other trade)
-		if (GetNumTradeSkills() > 0) then
-			local craftName, craftSubSpellName, craftType, numAvailable, isExpanded;
-			local craftItemLink;
-			local tradeskillName, currentLevel, maxLevel = GetTradeSkillLine();
-			local a,b,c,d;
-			local reagentItemLink;
-
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID] = {};
-			end
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] = {};
-			end
-			EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"][tradeskillName] = date("%Y%m%d%H%M%S");
-			EngInventory_SetTradeSkills();
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"] = {};
-			end
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"] = {};
-			end
-
-			for i = 1, GetNumTradeSkills() do
-				craftName, craftSubSpellName, craftType, numAvailable, isExpanded = GetTradeSkillInfo(i);
-				craftItemLink = GetTradeSkillItemLink(i);
-				if ( (craftItemLink ~= nil) and (type(craftItemLink) == "string") ) then
-					for a,b,c,d in string.gfind(craftItemLink, "(%d+):(%d+):(%d+):(%d+)") do
-						craftItemLink = ""..a..":0:"..c..":0";
-					end
-
-					if ( EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink] == nil ) then
-						EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink] = {};
-					end
-					EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink][tradeskillName] = 1;
-				end
-
-				if (GetTradeSkillNumReagents(i) > 0) then
-					for i2 = 1, GetTradeSkillNumReagents(i) do
-						reagentItemLink = GetTradeSkillReagentItemLink(i,i2);
-						if (reagentItemLink ~= nil) then
-							for a,b,c,d in string.gfind(reagentItemLink, "(%d+):(%d+):(%d+):(%d+)") do
-								reagentItemLink = ""..a..":0:"..c..":0";
-							end						
-							
-							if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink] == nil) then
-								EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink] = {};
-							end
-							EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink][tradeskillName] = 1;
-						end
-					end
-				end
-			end
-		end
-	elseif ( event == "UPDATE_INVENTORY_ALERTS" ) then
-		local itemLink;
-		local a,b,c,d;
-
-		EngInventory_PrintDEBUG("About to scan inventory");
-
-		if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["equipped_items"] == nil) then
-			EngInventoryConfig[ENGINVENTORY_PLAYERID]["equipped_items"] = {};
-		end
-
-		for key,value in { "HeadSlot","NeckSlot","ShoulderSlot","BackSlot","ChestSlot",
-			"ShirtSlot","TabardSlot","WristSlot","HandsSlot","WaistSlot","LegsSlot",
-			"FeetSlot","Finger0Slot","Finger1Slot","Trinket0Slot","Trinket1Slot",
-			"MainHandSlot","SecondaryHandSlot","RangedSlot" } do
-
-			EngInventory_PrintDEBUG( "Scanning: "..value );
-			itemLink = GetInventoryItemLink("player", GetInventorySlotInfo(value) );
-			if ( (itemLink ~= nil) and (type(itemLink) == "string") ) then
-				for a,b,c,d in string.gfind(itemLink, "(%d+):(%d+):(%d+):(%d+)") do
-					itemLink = ""..a..":0:"..c..":0";
-				end
-				
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["equipped_items"][itemLink] = 1;
-			end
-		end
-
-                EngInventory_UpdateWindow();
-	else
-		EngInventory_PrintDEBUG("OnEvent: No event handler found.");
-        end
-
-	EngInventory_PrintDEBUG("OnEvent: Finished "..event);
+function EngInventory_newTradeFrameShow()
+	EngInventory_oldTradeFrameShow();
+	if ( EngInventory_addItem and not CursorHasItem() ) then
+		PickupContainerItem(EngInventory_addItem[1], EngInventory_addItem[2]);
+		ClickTradeButton(1);
+	end
+	EngInventory_addItem = nil;
 end
 
 function EngInventory_OnEvent(event)
-        EngInventory_PrintDEBUG("event: '"..event.."'");
+
+	if ( EngInventory_frame:IsVisible() ) then
+
+        EngBags_PrintDEBUG("bags_event: '"..event.."'");
 
         if ( event == "BAG_UPDATE" ) then
                 EngInventory_UpdateWindow();
-				EngInventory_Update_BagSlots()
+				EngInventory_Update_BagSlots();
         elseif ( event == "BAG_UPDATE_COOLDOWN" ) then
                 EngInventory_UpdateWindow();
-				EngInventory_Update_BagSlots()
-        elseif ( event == "ITEM_LOCK_CHANGED" ) then
-                EngInventory_UpdateWindow();
-				EngInventory_Update_BagSlots()
-	elseif ( event == "CRAFT_SHOW" ) then
-		-- load craft info (Enchanting)
-		if (GetNumCrafts() > 0) then
-			local craftName, craftSubSpellName, craftType, numAvailable, isExpanded;
-			local craftItemLink;
-			local tradeskillName, currentLevel, maxLevel = GetCraftDisplaySkillLine();
-			local a,b,c,d;
-			local reagentItemLink;
-			local tmpval, tmptooltip, idx, tmptooltip2;
-
-			-- hunter training window shows up as a craft with a nil tradeskillName
-			if (tradeskillName ~= nil) then
-
-				if (EngInventoryConfig[ENGINVENTORY_PLAYERID] == nil) then
-					EngInventoryConfig[ENGINVENTORY_PLAYERID] = {};
-				end
-				if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] == nil) then
-					EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] = {};
-				end
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"][tradeskillName] = date("%y%m%d%H%M%S");
-				EngInventory_SetTradeSkills();
-				if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"] == nil) then
-					EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"] = {};
-				end
-				---- reciperadar fix by Zerf start
-				if ( EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"] == nil ) then
-					EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"] = {};
-				end
-				---- reciperadar fix by Zerf end
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName] = {};	-- wipe it out, we're refreshing it now anyway
-
-				if (GetNumCrafts() > 0) then
-					for i = 1, GetNumCrafts() do
-						craftName, craftSubSpellName, craftType, numAvailable, isExpanded = GetCraftInfo(i);
-						craftItemLink = GetCraftItemLink(i);
-						-- remember: a craft might just be a skill and not a physical item
-						if ( (craftItemLink ~= nil) and (type(craftItemLink) == "string") ) then
-							for a,b,c,d in string.gfind(craftItemLink, "(%d+):(%d+):(%d+):(%d+)") do
-								craftItemLink = ""..a..":0:"..c..":0";
-							end
-
-							if ( EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink] == nil ) then
-								EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink] = {};
-							end
-							EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink][tradeskillName] = 1;
-						end
-
-						-- build the complete info about tradeskills, this is for exporting data
-						-- so now I store by craftName instead of craftItemLink
-						if ( (EngInventory_BuildTradeList[tradeskillName] == nil) and (EngInventoryConfig["build_trade_list"] == 1) ) then
-							EngInventory_tt:SetCraftSpell(i);
-							if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName] == nil) then
-								EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName] = {};
-							end
-							EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName]["item"] = EngInventory_ExtractTooltip("EngInventory_tt");
-						end
-
-						if (GetCraftNumReagents(i) > 0) then
-							for i2 = 1, GetCraftNumReagents(i) do
-								reagentItemLink = GetCraftReagentItemLink(i,i2);
-								if (reagentItemLink ~= nil) then
-									for a,b,c,d in string.gfind(reagentItemLink, "(%d+):(%d+):(%d+):(%d+)") do
-										reagentItemLink = ""..a..":0:"..c..":0";
-									end						
-									
-									if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink] == nil) then
-										EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink] = {};
-									end
-									EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink][tradeskillName] = 1;
-
-									if ( (EngInventory_BuildTradeList[tradeskillName] == nil) and (EngInventoryConfig["build_trade_list"] == 1) ) then
-										EngInventory_tt:SetCraftItem(i,i2);
-										EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName][reagentItemLink] = EngInventory_ExtractTooltip("EngInventory_tt");
-										EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName][reagentItemLink]["n"],
-										EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName][reagentItemLink]["t"],
-										EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName][reagentItemLink]["c"] = GetCraftReagentInfo(i,i2);
-									end
-								end
-							end
-						end
-					end
-				end
-
-				EngInventory_BuildTradeList[tradeskillName] = 1;	-- only do the exhaustive load once
-			end
-		end
-	elseif ( event == "TRADE_SKILL_SHOW" ) then
-		-- load tradeskill info (every other trade)
-		if (GetNumTradeSkills() > 0) then
-			local craftName, craftSubSpellName, craftType, numAvailable, isExpanded;
-			local craftItemLink;
-			local tradeskillName, currentLevel, maxLevel = GetTradeSkillLine();
-			local a,b,c,d;
-			local reagentItemLink;
-
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID] = {};
-			end
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"] = {};
-			end
-			EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskills"][tradeskillName] = date("%Y%m%d%H%M%S");
-			EngInventory_SetTradeSkills();
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"] = {};
-			end
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"] == nil) then
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"] = {};
-			end
-
-			EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName] = {};
-
-			for i = 1, GetNumTradeSkills() do
-				craftName, craftType, numAvailable, isExpanded = GetTradeSkillInfo(i);
-				craftItemLink = GetTradeSkillItemLink(i);
-				if (craftType ~= "header") then
-					TradeSkillFrame_SetSelection(i)
-					TradeSkillFrame_Update();
-
-					if ( (craftItemLink ~= nil) and (type(craftItemLink) == "string") ) then
-						for a,b,c,d in string.gfind(craftItemLink, "(%d+):(%d+):(%d+):(%d+)") do
-							craftItemLink = ""..a..":0:"..c..":0";
-						end
-
-						if ( EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink] == nil ) then
-							EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink] = {};
-						end
-						EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][craftItemLink][tradeskillName] = 1;
-
-						-- build the complete info about tradeskills, this is for exporting data
-						if ( (EngInventory_BuildTradeList[tradeskillName] == nil) and (EngInventoryConfig["build_trade_list"] == 1) ) then
-							if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName] == nil) then
-								EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName] = {};
-							end
-							EngInventory_tt:SetTradeSkillItem(i);
-							EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName]["item"] = EngInventory_ExtractTooltip("EngInventory_tt");
-						end
-
-						if (GetTradeSkillNumReagents(i) > 0) then
-							for i2 = 1, GetTradeSkillNumReagents(i) do
-								reagentItemLink = GetTradeSkillReagentItemLink(i,i2);
-								if (reagentItemLink ~= nil) then
-									for a,b,c,d in string.gfind(reagentItemLink, "(%d+):(%d+):(%d+):(%d+)") do
-										reagentItemLink = ""..a..":0:"..c..":0";
-									end						
-									
-									if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink] == nil) then
-										EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink] = {};
-									end
-									EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][reagentItemLink][tradeskillName] = 1;
-
-									if ( (EngInventory_BuildTradeList[tradeskillName] == nil) and (EngInventoryConfig["build_trade_list"] == 1) ) then
-										EngInventory_tt:SetTradeSkillItem(i,i2);
-										EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName][reagentItemLink] = EngInventory_ExtractTooltip("EngInventory_tt");
-										EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName][reagentItemLink]["n"],
-										EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName][reagentItemLink]["t"],
-										EngInventoryConfig[ENGINVENTORY_PLAYERID]["trades"][tradeskillName][craftName][reagentItemLink]["c"] = GetTradeSkillReagentInfo(i,i2);
-									end
-								end
-							end
-						end
-					end
-				end
-			end
-
-			EngInventory_BuildTradeList[tradeskillName] = 1;	-- only do the exhaustive load once
-		end
-	elseif ( event == "UPDATE_INVENTORY_ALERTS" ) then
-		local itemLink;
-		local a,b,c,d;
-
-		EngInventory_PrintDEBUG("About to scan inventory");
-
-		if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["equipped_items"] == nil) then
-			EngInventoryConfig[ENGINVENTORY_PLAYERID]["equipped_items"] = {};
-		end
-
-		for key,value in { "HeadSlot","NeckSlot","ShoulderSlot","BackSlot","ChestSlot",
-			"ShirtSlot","TabardSlot","WristSlot","HandsSlot","WaistSlot","LegsSlot",
-			"FeetSlot","Finger0Slot","Finger1Slot","Trinket0Slot","Trinket1Slot",
-			"MainHandSlot","SecondaryHandSlot","RangedSlot" } do
-
-			EngInventory_PrintDEBUG( "Scanning: "..value );
-			itemLink = GetInventoryItemLink("player", GetInventorySlotInfo(value) );
-			if ( (itemLink ~= nil) and (type(itemLink) == "string") ) then
-				for a,b,c,d in string.gfind(itemLink, "(%d+):(%d+):(%d+):(%d+)") do
-					itemLink = ""..a..":0:"..c..":0";
-				end
-				
-				EngInventoryConfig[ENGINVENTORY_PLAYERID]["equipped_items"][itemLink] = 1;
-			end
-		end
-
-                EngInventory_UpdateWindow();
+				EngInventory_Update_BagSlots();
+--      elseif ( event == "ITEM_LOCK_CHANGED" ) then
+--              EngInventory_UpdateWindow();
+--	elseif ( event == "CRAFT_SHOW" ) then
+--		EngBags_Craft();
+--	elseif ( event == "TRADE_SKILL_SHOW" ) then
+--		EngBags_Trade();
+--	elseif ( event == "UPDATE_INVENTORY_ALERTS" ) then
+--		local itemLink;
+--		local a,b,c,d;
+--
+--		EngBags_PrintDEBUG("About to scan inventory");
+--
+--		if (EngBagsConfig[EngBags_PLAYERID]["equipped_items"] == nil) then
+--			EngBagsConfig[EngBags_PLAYERID]["equipped_items"] = {};
+--		end
+--
+--		for key,value in { "HeadSlot","NeckSlot","ShoulderSlot","BackSlot","ChestSlot",
+--			"ShirtSlot","TabardSlot","WristSlot","HandsSlot","WaistSlot","LegsSlot",
+--			"FeetSlot","Finger0Slot","Finger1Slot","Trinket0Slot","Trinket1Slot",
+--			"MainHandSlot","SecondaryHandSlot","RangedSlot" } do
+--
+--			EngBags_PrintDEBUG( "Scanning: "..value );
+--			itemLink = GetInventoryItemLink("player", GetInventorySlotInfo(value) );
+--			if ( (itemLink ~= nil) and (type(itemLink) == "string") ) then
+--				for a,b,c,d in string.gfind(itemLink, "(%d+):(%d+):(%d+):(%d+)") do
+--					itemLink = ""..a..":0:"..c..":0";
+--				end
+--				
+--				EngBagsConfig[EngBags_PLAYERID]["equipped_items"][itemLink] = 1;
+--			end
+--		end
+--
+--              EngInventory_UpdateWindow();
 	else
-		EngInventory_PrintDEBUG("OnEvent: No event handler found.");
+		EngBags_PrintDEBUG("OnEvent: No event handler found.");
         end
 
-	EngInventory_PrintDEBUG("OnEvent: Finished "..event);
+	EngBags_PrintDEBUG("bags_OnEvent: Finished "..event);
+
+	end
+
 end
 
 function EngInventory_StartMoving(frame)
@@ -1742,7 +1245,7 @@ function EngInventory_StopMoving(frame)
                 EngInventoryConfig["frameTOP"] = frame:GetTop() * frame:GetScale();
                 EngInventoryConfig["frameBOTTOM"] = frame:GetBottom() * frame:GetScale();
 
-                EngInventory_PrintDEBUG("new position:  top="..EngInventoryConfig["frameTOP"]..", bottom="..EngInventoryConfig["frameBOTTOM"]..", left="..EngInventoryConfig["frameLEFT"]..", right="..EngInventoryConfig["frameRIGHT"] );
+                EngBags_PrintDEBUG("new position:  top="..EngInventoryConfig["frameTOP"]..", bottom="..EngInventoryConfig["frameBOTTOM"]..", left="..EngInventoryConfig["frameLEFT"]..", right="..EngInventoryConfig["frameRIGHT"] );
         end
 end
 
@@ -1769,48 +1272,54 @@ function EngInventory_Update_item_cache()
 	local update_suggested = 0;
 	local resort_suggested = 0;
 	local resort_mandatory = 0;
+	local pre_locked, now_locked, pre_link, pre_count, now_count;
 	-- variables used in outer loop, bag:
 	local bagNumSlots;
 	local is_shot_bag;
 	-- variables used in inner loop, slots:
 	local a,b,c,d;
 	local sequencial_slot_num = 0;
-
-	for bagnum = 0, 4 do
+	EngInventory_item_cache = EngBagsItems[EngBags_PLAYERID];
+	for index, bagnum in ipairs(EngInventory_Bags) do
 		if (EngInventoryConfig["show_Bag"..bagnum] == 1) then
 			if (EngInventory_item_cache[bagnum] == nil) then
 				EngInventory_item_cache[bagnum] = {};
 			end
 
-			bagNumSlots = GetContainerNumSlots(bagnum);
+			if (bagnum == KEYRING_CONTAINER) then
+				bagNumSlots = GetKeyRingSize(KEYRING_CONTAINER);
+			else
+				bagNumSlots = GetContainerNumSlots(bagnum);		
+			end
 
 			if (bagNumSlots > 0) then
-				is_shot_bag = EngInventory_IsShotBag(bagnum);
+				is_shot_bag = EngBags_IsShotBag(bagnum);
 				for slotnum = 1, bagNumSlots do
 					if (EngInventory_item_cache[bagnum][slotnum] == nil) then
 						EngInventory_item_cache[bagnum][slotnum] = { ["keywords"] = {} };
 					end
 
 					sequencial_slot_num = sequencial_slot_num + 1;
-					itm = {
-						["itemlink"] = GetContainerItemLink(bagnum, slotnum);
-						["bagnum"] = bagnum,
-						["slotnum"] = slotnum,
-						["sequencial_slot_num"] = sequencial_slot_num,
-						-- take items from old position
-						["bar"] = EngInventory_item_cache[bagnum][slotnum]["bar"],
-						["button_num"] = EngInventory_item_cache[bagnum][slotnum]["button_num"],
-						["indexed_on"] = EngInventory_item_cache[bagnum][slotnum]["indexed_on"],
-						["display_string"] = EngInventory_item_cache[bagnum][slotnum]["display_string"],
-						["barClass"] = EngInventory_item_cache[bagnum][slotnum]["barClass"],
-						["button_num"] = EngInventory_item_cache[bagnum][slotnum]["button_num"],	-- assigned when drawing
-						["keywords"] = EngInventory_item_cache[bagnum][slotnum]["keywords"],
-						["itemlink_override_key"] = EngInventory_item_cache[bagnum][slotnum]["itemlink_override_key"],
-						-- misc junk
-						["search_match"] = EngInventory_item_cache[bagnum][slotnum]["search_match"],
-						["gametooltip"] = EngInventory_item_cache[bagnum][slotnum]["gametooltip"]
-						};
 
+					itm = EngInventory_item_cache[bagnum][slotnum];
+					pre_locked = itm["locked"];
+					pre_count = itm["itemcount"];
+					pre_link = itm["itemlink"];
+					_,now_count,now_locked,_,_ = GetContainerItemInfo(bagnum, slotnum);
+
+					if ( itm["iteminfo"] ~= GetContainerItemLink(bagnum, slotnum) or itm["bagnum"] == nil or pre_locked ~= now_locked or now_count ~= pre_count) then 
+					
+					itm["itemlink"] = GetContainerItemLink(bagnum, slotnum);
+					itm["bagnum"] = bagnum;
+					itm["slotnum"] = slotnum;
+					itm["sequencial_slot_num"] = sequencial_slot_num;
+					itm["bagname"] = GetBagName(bagnum);
+					itm["iteminfo"] = GetContainerItemLink(bagnum, slotnum);
+
+					if (bagnum == KEYRING_CONTAINER) then
+						itm["bagname"] = "KeyRing";
+						itm["gametooltip"] = nil;
+					end
 					if (is_shot_bag) then
 						itm["keywords"]["SHOT_BAG"]=1;
 					end
@@ -1844,6 +1353,62 @@ function EngInventory_Update_item_cache()
 						itm["locked"] = 0;
 						itm["quality"] = 0;
 						itm["readable"] = 0;
+
+						if bagnum > 0 then
+							local BankSlotLink = GetInventoryItemLink("player",(19+bagnum));
+							if BankSlotLink ~= nil then
+								local _, _, itemCode = strfind(BankSlotLink, "(%d+):");
+								local _, _, _, _, _, itemSubtype, _, _, itemTexture = GetItemInfo(itemCode);
+								if (EngInventoryConfig["hide_bag_icons"] == 0) then
+									itm["texture"] = itemTexture;
+								else
+									-- Clean the empty bag texture if setting is on.
+									itm["texture"] = nil;
+								end
+								itm["itemsubtype"] = itemSubtype;
+								if (itemSubtype == "Soul Bag") then
+									itm["keywords"]["SOUL_BAG"]=1;
+								end
+								if (itemSubtype == "Enchanting Bag") then
+									itm["keywords"]["ENCHANT_BAG"]=1;
+								end
+								if (itemSubtype == "Herb Bag") then
+									itm["keywords"]["HERB_BAG"]=1;
+								end
+								if (itemSubtype == "Quiver") then
+									itm["keywords"]["ARROW_BAG"]=1;
+								end
+								if (itemSubtype == "Ammo Pouch") then
+									itm["keywords"]["AMMO_BAG"]=1;
+								end
+							end
+						else
+								if (EngInventoryConfig["hide_bag_icons"] == 0) then
+									if (bagnum == KEYRING_CONTAINER) then
+										itm["texture"] = "Interface\\ContainerFrame\\KeyRing-Bag-Icon";
+									else
+										itm["texture"] = "Interface\\Icons\\INV_ValentinesCandySack";
+									end
+								else
+									-- Clean the empty bag texture if setting is on.
+									itm["texture"] = nil;
+								end
+								itm["itemsubtype"] = "Backpack Slot";
+								
+							
+						end
+					end
+
+					-- item has changed.
+					if (itm["itemlink"] ~= pre_link) then
+						-- the item changed
+						if (itm["indexed_on"] ~= nil) then
+							resort_suggested = 1;
+							itm["indexed_on"] = GetTime();
+							itm["display_string"] = "newItemText";
+						end
+					end
+					
 					end
 
 					if (itm["bar"] == nil) then
@@ -1853,39 +1418,26 @@ function EngInventory_Update_item_cache()
 					if (itm["itemsubtype"] == nil) then itm["itemsubtype"] = ""; end
 					if (itm["itemname"] == nil) then itm["itemname"] = ""; end
 
-					if (itm["locked"] ~= EngInventory_item_cache[bagnum][slotnum]["locked"]) then
+					if (itm["locked"] ~= pre_locked) then
 						update_suggested = 1;
 					end
 
-					if (
-						(itm["itemlink"] ~= EngInventory_item_cache[bagnum][slotnum]["itemlink"]) or
-						(itm["keywords"]["SHOT_BAG"] ~= EngInventory_item_cache[bagnum][slotnum]["keywords"]["SHOT_BAG"])
-						) then
-						-- the item changed
-						if (itm["indexed_on"] ~= nil) then
-							resort_suggested = 1;
-							itm["indexed_on"] = GetTime();
-							itm["display_string"] = "newItemText";
+					-- item has not changed, maybe the count did?
+					if ( (itm["itemlink"] == pre_link) and (itm["itemcount"] ~= pre_count) and (pre_count ~= nil) ) then
+						update_suggested = 1;
+						if (itm["itemcount"] < pre_count) then
+							itm["display_string"] = "newItemTextMinus";
+						else
+							itm["display_string"] = "newItemTextPlus";
 						end
-					else
-						-- item has not changed, maybe the count did?
-						if ( (itm["itemcount"] ~= EngInventory_item_cache[bagnum][slotnum]["itemcount"]) and (EngInventory_item_cache[bagnum][slotnum]["itemcount"] ~= nil) ) then
-							update_suggested = 1;
-							if (itm["itemcount"] < EngInventory_item_cache[bagnum][slotnum]["itemcount"]) then
-								itm["display_string"] = "newItemTextMinus";
-							else
-								itm["display_string"] = "newItemTextPlus";
-							end
-							itm["indexed_on"] = GetTime();
-						end
+						itm["indexed_on"] = GetTime();
 					end
 
 					if (itm["indexed_on"] == nil) then
 						itm["indexed_on"] = 1;
 						itm["display_string"] = "NewItemText_Off";
 					end
-
-					EngInventory_item_cache[bagnum][slotnum] = itm;	-- save updated information
+					-- EngInventory_item_cache[bagnum][slotnum] = itm;	-- save updated information
 				end
 			else
 				-- bagNumSlots = 0, make sure you wipe the cache entry
@@ -1914,14 +1466,42 @@ end
 --              return selected_bar, barClass;
 function EngInventory_PickBar(itm)
         if (itm["itemlink"] == nil) then
-                if (itm["keywords"]["SHOT_BAG"]) then
-			itm["bar"] = EngInventoryConfig["putinslot--EMPTY_PROJECTILE_SLOTS"];
+                if (itm["keywords"]["HERB_BAG"]) then
+			itm["bar"] = EngInventoryConfig["putinslot--HERB_EMPTY_SLOTS"];
 			while (type(itm["bar"]) ~= "number") do
 				itm["bar"] = EngInventoryConfig[itm["bar"]];
 			end
-			itm["barClass"] = "EMPTY_PROJECTILE_SLOTS";
+			itm["barClass"] = "HERB_EMPTY_SLOTS";
                         return itm;
-                else
+                elseif (itm["keywords"]["ARROW_BAG"]) then
+			itm["bar"] = EngInventoryConfig["putinslot--ARROW_EMPTY_SLOTS"];
+			while (type(itm["bar"]) ~= "number") do
+				itm["bar"] = EngInventoryConfig[itm["bar"]];
+			end
+			itm["barClass"] = "ARROW_EMPTY_SLOTS";
+                        return itm;
+                elseif (itm["keywords"]["AMMO_BAG"]) then
+			itm["bar"] = EngInventoryConfig["putinslot--AMMO_EMPTY_SLOTS"];
+			while (type(itm["bar"]) ~= "number") do
+				itm["bar"] = EngInventoryConfig[itm["bar"]];
+			end
+			itm["barClass"] = "AMMO_EMPTY_SLOTS";
+                        return itm;
+                elseif (itm["keywords"]["SOUL_BAG"]) then
+			itm["bar"] = EngInventoryConfig["putinslot--SHARD_EMPTY_SLOTS"];
+			while (type(itm["bar"]) ~= "number") do
+				itm["bar"] = EngInventoryConfig[itm["bar"]];
+			end
+			itm["barClass"] = "SHARD_EMPTY_SLOTS";
+                        return itm;
+                elseif (itm["keywords"]["ENCHANT_BAG"]) then
+			itm["bar"] = EngInventoryConfig["putinslot--ENCHANT_EMPTY_SLOTS"];
+			while (type(itm["bar"]) ~= "number") do
+				itm["bar"] = EngInventoryConfig[itm["bar"]];
+			end
+			itm["barClass"] = "ENCHANT_EMPTY_SLOTS";
+                        return itm;
+		else
 			itm["bar"] = EngInventoryConfig["putinslot--EMPTY_SLOTS"];
 			while (type(itm["bar"]) ~= "number") do
 				itm["bar"] = EngInventoryConfig[itm["bar"]];
@@ -1930,6 +1510,14 @@ function EngInventory_PickBar(itm)
                         return itm;
                 end
         else
+                if (itm["keywords"]["SHOT_BAG"]) then
+			itm["bar"] = EngInventoryConfig["putinslot--USED_PROJECTILE_SLOTS"];
+			while (type(itm["bar"]) ~= "number") do
+				itm["bar"] = EngInventoryConfig[itm["bar"]];
+			end
+			itm["barClass"] = "USED_PROJECTILE_SLOTS";
+        	        return itm;
+		end
 		-- vars used in tooltip creation
 		local idx, tmptooltip, tmpval, tooltip_info_concat;
 		-- vars used in array loops
@@ -1950,32 +1538,32 @@ function EngInventory_PickBar(itm)
 		end
 
 		-- setup tradeskill keywords
-		if ( (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"] ~= nil) and (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][ itm["itemlink_noninstance"] ] ~= nil) ) then
+		if ( (EngBagsConfig[EngBags_PLAYERID]["tradeskill_items"] ~= nil) and (EngBagsConfig[EngBags_PLAYERID]["tradeskill_items"][ itm["itemlink_noninstance"] ] ~= nil) ) then
 			-- the item exists in our cache
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][ itm["itemlink_noninstance"] ][ENGINVENTORY_TRADE1] ~= nil) then
+			if (EngBagsConfig[EngBags_PLAYERID]["tradeskill_items"][ itm["itemlink_noninstance"] ][ENGINVENTORY_TRADE1] ~= nil) then
 				itm["keywords"]["TRADESKILL_1"] = 1;
-			elseif (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][ itm["itemlink_noninstance"] ][ENGINVENTORY_TRADE2] ~= nil) then
+			elseif (EngBagsConfig[EngBags_PLAYERID]["tradeskill_items"][ itm["itemlink_noninstance"] ][ENGINVENTORY_TRADE2] ~= nil) then
 				itm["keywords"]["TRADESKILL_2"] = 1;
-			elseif (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][ itm["itemlink_noninstance"] ][EILocal["Cooking"]] ~= nil) then
+			elseif (EngBagsConfig[EngBags_PLAYERID]["tradeskill_items"][ itm["itemlink_noninstance"] ][EILocal["Cooking"]] ~= nil) then
 				itm["keywords"]["TRADESKILL_COOKING"] = 1;
-			elseif (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_items"][ itm["itemlink_noninstance"] ][EILocal["First Aid"]] ~= nil) then
+			elseif (EngBagsConfig[EngBags_PLAYERID]["tradeskill_items"][ itm["itemlink_noninstance"] ][EILocal["First Aid"]] ~= nil) then
 				itm["keywords"]["TRADESKILL_FIRSTAID"] = 1;
 			end
 		end
 
 		-- setup tradeskill produced items keywords
-		if ( (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"] ~= nil) and (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][ itm["itemlink_noninstance"] ] ~= nil) ) then
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][ itm["itemlink_noninstance"] ][ENGINVENTORY_TRADE1] ~= nil) then
+		if ( (EngBagsConfig[EngBags_PLAYERID]["tradeskill_production"] ~= nil) and (EngBagsConfig[EngBags_PLAYERID]["tradeskill_production"][ itm["itemlink_noninstance"] ] ~= nil) ) then
+			if (EngBagsConfig[EngBags_PLAYERID]["tradeskill_production"][ itm["itemlink_noninstance"] ][ENGINVENTORY_TRADE1] ~= nil) then
 				itm["keywords"]["TRADESKILL_1_CREATED"] = 1;
-			elseif (EngInventoryConfig[ENGINVENTORY_PLAYERID]["tradeskill_production"][ itm["itemlink_noninstance"] ][ENGINVENTORY_TRADE2] ~= nil) then
+			elseif (EngBagsConfig[EngBags_PLAYERID]["tradeskill_production"][ itm["itemlink_noninstance"] ][ENGINVENTORY_TRADE2] ~= nil) then
 				itm["keywords"]["TRADESKILL_2_CREATED"] = 1;
 			end
 			-- not doing cooking or first aid.
 		end
 
 		-- setup equipped items keywords
-		if ( EngInventoryConfig[ENGINVENTORY_PLAYERID]["equipped_items"] ~= nil ) then
-			if (EngInventoryConfig[ENGINVENTORY_PLAYERID]["equipped_items"][ itm["itemlink_noninstance"] ] ~= nil) then
+		if ( EngBagsConfig[EngBags_PLAYERID]["equipped_items"] ~= nil ) then
+			if (EngBagsConfig[EngBags_PLAYERID]["equipped_items"][ itm["itemlink_noninstance"] ] ~= nil) then
 				itm["keywords"]["EQUIPPED"] = 1;
 			end
 		end
@@ -1983,7 +1571,12 @@ function EngInventory_PickBar(itm)
 		-- Load tooltip
 		EngInventory_tt:SetOwner(UIParent, "ANCHOR_NONE");	-- this makes sure that tooltip.valid = true
 
-		EngInventory_tt:SetBagItem(itm["bagnum"],itm["slotnum"]);
+		if itm["bagnum"] < 0 then
+				EngInventory_tt:SetInventoryItem("player", KeyRingButtonIDToInvSlotID(itm["slotnum"]));
+			else
+				EngInventory_tt:SetBagItem(itm["bagnum"],itm["slotnum"]);
+		end
+
 		idx = 1;
 		tmptooltip = getglobal("EngInventory_ttTextLeft"..idx);
 		tooltip_info_concat = "";
@@ -2032,7 +1625,7 @@ function EngInventory_PickBar(itm)
 				if (value[1] ~= "") then
 					local found = 1;
 					
-					-- value[1] == category to place it in
+					-- value[1] == catagory to place it in
 
 					-- check keywords
 					if ( (value[2] ~= "") and (itm["keywords"][value[2]] == nil) ) then
@@ -2097,29 +1690,33 @@ function EngInventory_Sort_item_cache()
 	local barnum;
 
 	--Print("Resorting Items");
-
+	EngInventory_item_cache = EngBagsItems[EngBags_PLAYERID];
 	-- wipe the current bar positions table
 	EngInventory_bar_positions = {};
-	for i = 1, ENGINVENTORY_MAX_BARS do
+	for i = 1, EngBags_MAX_BARS do
 		EngInventory_bar_positions[i] = {};
 	end
 
-	for bagnum = 0, 4 do
+	for index, bagnum in ipairs(EngInventory_Bags) do
 		if (EngInventoryConfig["show_Bag"..bagnum] == 1) then
 			bagNumSlots = table.getn( EngInventory_item_cache[bagnum] );
 			if (bagNumSlots > 0) then
 				for slotnum = 1, bagNumSlots do
-					EngInventory_item_cache[bagnum][slotnum] = EngInventory_PickBar( EngInventory_item_cache[bagnum][slotnum] );
-
-					table.insert( EngInventory_bar_positions[ EngInventory_item_cache[bagnum][slotnum]["bar"] ], { ["bagnum"]=bagnum, ["slotnum"]=slotnum } );
+					-- Insert only not null slots, this is for Hide Empty KeyRing Slots.
+					if ( (EngInventory_item_cache[bagnum][slotnum]["itemlink"] == nil) and (EngInventoryConfig["hide_keyring_empty_slots"] == 1) and (bagnum == KEYRING_CONTAINER) ) then
+						EngInventory_item_cache[bagnum][slotnum] = EngInventory_PickBar( EngInventory_item_cache[bagnum][slotnum] );
+					else
+						EngInventory_item_cache[bagnum][slotnum] = EngInventory_PickBar( EngInventory_item_cache[bagnum][slotnum] );
+						table.insert( EngInventory_bar_positions[ EngInventory_item_cache[bagnum][slotnum]["bar"] ], { ["bagnum"]=bagnum, ["slotnum"]=slotnum } );
+					end
 				end
 			end
 		end
 	end
 
         -- sort the cache now
-        for barnum = 1, ENGINVENTORY_MAX_BARS do
-                if (EngInventoryConfig["bar_sort_"..barnum] == ENGINVENTORY_SORTBYNAME) then
+        for barnum = 1, EngBags_MAX_BARS do
+                if (EngInventoryConfig["bar_sort_"..barnum] == EngBags_SORTBYNAME) then
                         table.sort(EngInventory_bar_positions[barnum],
                                 function(a,b)
                                         return  EngInventory_item_cache[a["bagnum"]][a["slotnum"]]["barClass"]..
@@ -2132,19 +1729,19 @@ function EngInventory_Sort_item_cache()
 						EngInventory_item_cache[b["bagnum"]][b["slotnum"]]["itemname"]..
 						string.format("%04s", EngInventory_item_cache[b["bagnum"]][b["slotnum"]]["itemcount"])
                                 end);
-                elseif (EngInventoryConfig["bar_sort_"..barnum] == ENGINVENTORY_SORTBYNAMEREV) then
+                elseif (EngInventoryConfig["bar_sort_"..barnum] == EngBags_SORTBYNAMEREV) then
                         table.sort(EngInventory_bar_positions[barnum],
                                 function(a,b)
                                         return  EngInventory_item_cache[a["bagnum"]][a["slotnum"]]["barClass"]..
 						EngInventory_item_cache[a["bagnum"]][a["slotnum"]]["itemsubtype"]..
-						EngInventory_ReverseString(
+						EngBags_ReverseString(
 							EngInventory_item_cache[a["bagnum"]][a["slotnum"]]["itemname"])..
 							string.format("%04s",EngInventory_item_cache[a["bagnum"]][a["slotnum"]]["itemcount"]
 							)
 								>
                                                 EngInventory_item_cache[b["bagnum"]][b["slotnum"]]["barClass"]..
 						EngInventory_item_cache[b["bagnum"]][b["slotnum"]]["itemsubtype"]..
-						EngInventory_ReverseString(
+						EngBags_ReverseString(
 							EngInventory_item_cache[b["bagnum"]][b["slotnum"]]["itemname"])..
 							string.format("%04s",EngInventory_item_cache[b["bagnum"]][b["slotnum"]]["itemcount"]
 							)
@@ -2160,6 +1757,9 @@ end
 -- Make an inventory slot usable with the item specified in itm
 -- cache entry is the array that comes directly from the cache
 function EngInventory_UpdateButton(itemframe, itm)
+	if ( itemframe == nil or itm == nil ) then
+		return;
+	end
         local ic_start, ic_duration, ic_enable;
         local showSell = nil;
         local itemframe_texture = getglobal(itemframe:GetName().."IconTexture");
@@ -2264,17 +1864,17 @@ function EngInventory_UpdateButton(itemframe, itm)
         SetItemButtonCount(itemframe, itm["itemcount"]);
 
 	-- resize itemframe texture (this is the little border)
-	itemframe_normaltexture:SetWidth(ENGINVENTORY_BKGRFRAME_WIDTH);
-	itemframe_normaltexture:SetHeight(ENGINVENTORY_BKGRFRAME_HEIGHT);
+	itemframe_normaltexture:SetWidth(EngBags_BKGRFRAME_WIDTH);
+	itemframe_normaltexture:SetHeight(EngBags_BKGRFRAME_HEIGHT);
 
 	-- resize and position fonts
-	--itemframe_font.font = "Interface\Addons\EngInventory\DAB_CooldownFont.ttf";
-	itemframe_font:SetTextHeight( ENGINVENTORY_BUTTONFONTHEIGHT );	-- count, bottomright
+	--itemframe_font.font = "Interface\Addons\EngBags\DAB_CooldownFont.ttf";
+	itemframe_font:SetTextHeight( EngBags_BUTTONFONTHEIGHT );	-- count, bottomright
 	itemframe_font:ClearAllPoints();
 	itemframe_font:SetPoint("BOTTOMRIGHT", itemframe:GetName(), "BOTTOMRIGHT", 0-ENGINVENTORY_BUTTONFONTDISTANCE_X, ENGINVENTORY_BUTTONFONTDISTANCE_Y );
 	
-	--itemframe_stock.font = "Interface\Addons\EngInventory\DAB_CooldownFont.ttf";
-	itemframe_stock:SetTextHeight( ENGINVENTORY_BUTTONFONTHEIGHT2 );	-- stock, topleft
+	--itemframe_stock.font = "Interface\Addons\EngBags\DAB_CooldownFont.ttf";
+	itemframe_stock:SetTextHeight( EngBags_BUTTONFONTHEIGHT2 );	-- stock, topleft
 	itemframe_stock:ClearAllPoints();
 	itemframe_stock:SetPoint("TOPLEFT", itemframe:GetName(), "TOPLEFT", (ENGINVENTORY_BUTTONFONTDISTANCE_X / 2), 0-ENGINVENTORY_BUTTONFONTDISTANCE_Y );
 	
@@ -2284,7 +1884,7 @@ function EngInventory_UpdateButton(itemframe, itm)
                 SetItemButtonTextureVertexColor(itemframe, 0.4, 0.4, 0.4);
         end
 
-	cooldownFrame:SetScale(ENGINVENTORY_COOLDOWN_SCALE);
+	cooldownFrame:SetScale(EngBags_COOLDOWN_SCALE);
 
 end
 
@@ -2310,7 +1910,6 @@ function EngInventory_GetBarPositionAndCache()
 end
 
 function EngInventory_ItemButton_OnEnter()
-        --AllInOneInventory_Patching_Tooltip = 1;
         local bar,position,itm = EngInventory_GetBarPositionAndCache();
 
         if (EngInventory_edit_selected == "") then
@@ -2326,13 +1925,13 @@ function EngInventory_ItemButton_OnEnter()
                         -- move by class
                         if (itm["barClass"] ~= nil) then
 				if (EngInventory_edit_selected ~= "") then
-		                        GameTooltip:AddLine("|cFF00FF7FLeft click to move category |r"..EngInventory_edit_selected.."|cFF00FF7F to bar |r"..bar, 1,0.25,0.5 );
+		                        GameTooltip:AddLine("|cFF00FF7FLeft click to move catagory |r"..EngInventory_edit_selected.."|cFF00FF7F to bar |r"..bar, 1,0.25,0.5 );
 				else
-		                        GameTooltip:AddLine("|cFF00FF7FLeft click to select category to move:|r "..itm["barClass"], 1,0.25,0.5 );
+		                        GameTooltip:AddLine("|cFF00FF7FLeft click to select catagory to move:|r "..itm["barClass"], 1,0.25,0.5 );
 					--GameTooltip:AddLine("Right click to assign this item to a different class", 1,0,0 );
 				end
                         else
-                                GameTooltip:AddLine("error: Item has no category", 1,0,0 );
+                                GameTooltip:AddLine("error: Item has no catagory", 1,0,0 );
                         end
 
                         GameTooltip:Show();
@@ -2346,14 +1945,26 @@ function EngInventory_ItemButton_OnEnter()
                 end
                 return;
         end
-        GameTooltip:SetOwner(this, "ANCHOR_LEFT");
 
-        local hasCooldown, repairCost = GameTooltip:SetBagItem(itm["bagnum"], itm["slotnum"]);
+
+	if (EngInventoryConfig["frameLEFT"] < GetScreenWidth()/2) then
+	        GameTooltip:SetOwner(this, "ANCHOR_RIGHT");
+	else
+		GameTooltip:SetOwner(this, "ANCHOR_LEFT");
+	end
+
+	if (itm["bagnum"] ~= KEYRING_CONTAINER) then
+	        local hasCooldown, repairCost = GameTooltip:SetBagItem(itm["bagnum"], itm["slotnum"]);
+	else
+		local hasCooldown, repairCost = GameTooltip:SetInventoryItem("player", KeyRingButtonIDToInvSlotID(itm["slotnum"]));
+	end
         if ( hasCooldown ) then
                 this.updateTooltip = 1;
         else
                 this.updateTooltip = nil;
         end
+
+	EngBags_PrintDEBUG("Rollover Info | Bagnum::"..itm["bagnum"].." - Slotnum::"..itm["slotnum"]);
 
         if ( InRepairMode() and (repairCost and repairCost > 0) ) then
                 GameTooltip:AddLine(TEXT(REPAIR_COST), 1, 1, 1);
@@ -2361,7 +1972,7 @@ function EngInventory_ItemButton_OnEnter()
                 GameTooltip:Show();
         elseif ( MerchantFrame:IsVisible() ) then
                 ShowContainerSellCursor(itm["bagnum"], itm["slotnum"]);
-                EngInventory_RegisterCurrentTooltipSellValue(GameTooltip, itm["bagnum"], itm["slotnum"], itm);
+                EngBags_RegisterCurrentTooltipSellValue(GameTooltip, itm["bagnum"], itm["slotnum"], itm);
         elseif ( this.readable ) then
                 ShowInspectCursor();
         end
@@ -2370,11 +1981,11 @@ function EngInventory_ItemButton_OnEnter()
                 -- move by class
                 if (itm["barClass"] ~= nil) then
 			if (EngInventory_edit_selected ~= "") then
-				GameTooltip:AddLine("|cFF00FF7FLeft click to move category |r"..EngInventory_edit_selected.."|cFF00FF7F to bar |r"..bar, 1,0.25,0.5 );
+				GameTooltip:AddLine("|cFF00FF7FLeft click to move catagory |r"..EngInventory_edit_selected.."|cFF00FF7F to bar |r"..bar, 1,0.25,0.5 );
 			else
 				GameTooltip:AddLine(" ", 0,0,0);
-				GameTooltip:AddLine("|cFF00FF7FLeft click to select category to move:|r "..itm["barClass"], 1,0.25,0.5 );
-				GameTooltip:AddLine("Right click to assign this item to a different category", 1,0,0 );
+				GameTooltip:AddLine("|cFF00FF7FLeft click to select catagory to move:|r "..itm["barClass"], 1,0.25,0.5 );
+				GameTooltip:AddLine("Right click to assign this item to a different catagory", 1,0,0 );
 				GameTooltip:AddLine(" ", 0,0,0);
 			end
                 else
@@ -2382,14 +1993,21 @@ function EngInventory_ItemButton_OnEnter()
                 end
         end
 
-        EngInventory_ModifyItemTooltip(itm["bagnum"], itm["slotnum"], "GameTooltip", itm);
+	if itm["bagname"] == nil then
+		itm["bagname"] = "Backpack";
+	end
+
+	GameTooltip:AddLine("Container::"..itm["bagname"], 1,0,0 );
+
+	if ( EngInventoryConfig["tooltip_mode"] == 1 ) then
+		EngBags_ModifyItemTooltip(itm["bagnum"], itm["slotnum"], "GameTooltip", itm);
+	end
 
         if ( EngInventory_edit_mode == 1 ) then
 		-- redraw the window to show the hllighting of entire class items
 		EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
                 EngInventory_UpdateWindow();
         end
-        --AllInOneInventory_Patching_Tooltip = 0;
 end
 
 function EngInventory_OnUpdate(elapsed)
@@ -2410,7 +2028,7 @@ function EngInventory_OnUpdate(elapsed)
 end
 
 function EngInventory_ItemButton_OnLeave()
-        EngInventory_PrintDEBUG("ei_button: OnLeave()  this="..this:GetName() );
+        EngBags_PrintDEBUG("ei_button: OnLeave()  this="..this:GetName() );
 
         if (EngInventory_edit_selected == "") then
                 EngInventory_edit_hilight = "";
@@ -2487,7 +2105,7 @@ function EngInventory_ItemButton_OnClick(button, ignoreShift)
 				end
 			end
 		--else
-		--	EngInventory_PrintDEBUG("AxuItemMenus not detected");
+		--	EngBags_PrintDEBUG("AxuItemMenus not detected");
 		end
 
 		-- process normal clicks
@@ -2507,6 +2125,53 @@ function EngInventory_ItemButton_OnClick(button, ignoreShift)
 							end
 							OpenStackSplitFrame(this.count, this, "BOTTOMRIGHT", "TOPRIGHT");
 						end
+					end
+				elseif ( IsAltKeyDown() ) then		-- Manage Alt+Click Auto Trade/Auction
+					-- CT_MAILMOD change that function, here we get the original one
+					if ( CT_oldPickupContainerItem ~= nil ) then
+						-- This process mass mail support before we change the funcion
+						if ( CT_MailFrame:IsVisible() and not CursorHasItem() ) then
+							PickupContainerItem(itm["bagnum"], itm["slotnum"]);
+							EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
+							EngInventory_UpdateWindow();
+							return;
+						end
+						PickupContainerItem = CT_oldPickupContainerItem;
+					end
+					if ( TradeFrame:IsVisible() and not CursorHasItem() and EngInventoryConfig["EngBags_AltClick_Trade"] == 1) then
+						local tradeslot = TradeFrame_GetAvailableSlot();
+						if (tradeslot) then
+							PickupContainerItem(itm["bagnum"], itm["slotnum"]);
+							ClickTradeButton(tradeslot);
+							if (CursorHasItem()) then
+								PickupContainerItem(itm["bagnum"], itm["slotnum"]);
+							end
+						end
+					elseif (not CursorHasItem() and ( not TradeFrame or not TradeFrame:IsVisible() ) and ( not AuctionFrame or not AuctionFrame:IsVisible() ) and UnitExists("target") and CheckInteractDistance("target", 2) and UnitIsFriend("player", "target") and UnitIsPlayer("target") and EngBags_AltClick_Trade == 1 ) then
+						InitiateTrade("target");
+						if (CT_Mail_newTradeFrameShow ~= nil ) then
+							CT_Mail_addItem = { itm["bagnum"], itm["slotnum"], UnitName("target"), 2 };
+						else
+							EngInventory_addItem = { itm["bagnum"], itm["slotnum"] };
+						end
+					elseif ( AuctionFrame ~= nil and AuctionFrame:IsVisible() and not CursorHasItem() and EngInventoryConfig["EngBags_AltClick_Auction"] == 1) then
+							PickupContainerItem(itm["bagnum"], itm["slotnum"]);
+							ClickAuctionSellItemButton();
+							if (CursorHasItem()) then
+								PickupContainerItem(itm["bagnum"], itm["slotnum"]);
+							end
+					elseif ( SendMailFrame:IsVisible() and not CursorHasItem() and EngInventoryConfig["EngBags_AltClick_Mail"] == 1) then
+						PickupContainerItem(itm["bagnum"], itm["slotnum"]);
+						ClickSendMailItemButton();
+						if (CursorHasItem()) then
+							PickupContainerItem(itm["bagnum"], itm["slotnum"]);
+						end
+					else
+						PickupContainerItem(itm["bagnum"], itm["slotnum"]);
+					end
+					-- CT_MAILMOD restore new function
+					if ( CT_oldPickupContainerItem ~= nil ) then
+						PickupContainerItem = CT_newPickupContainerItem;
 					end
 				else
 					--AllInOneInventory_HandleQuickMount(bag, slot);
@@ -2615,7 +2280,7 @@ function EngInventory_SlotTargetButton_OnClick(button, ignoreShift)
                         bar = tonumber(tmp);
                 end
 
-                if ( (bar == nil) or (bar < 1) or (bar > ENGINVENTORY_MAX_BARS) ) then
+                if ( (bar == nil) or (bar < 1) or (bar > EngBags_MAX_BARS) ) then
                         return;
                 end
 
@@ -2657,7 +2322,7 @@ function EngInventory_SlotTargetButton_OnEnter()
                 if (EngInventory_edit_selected ~= "") then
                         GameTooltip:SetOwner(this, "ANCHOR_LEFT");
                         GameTooltip:ClearLines();
-                        GameTooltip:AddLine("|cFF00FF7FLeft click to move category |r"..EngInventory_edit_selected.."|cFF00FF7F to bar |r"..bar, 1,0.25,0.5 );
+                        GameTooltip:AddLine("|cFF00FF7FLeft click to move catagory |r"..EngInventory_edit_selected.."|cFF00FF7F to bar |r"..bar, 1,0.25,0.5 );
                         GameTooltip:Show();
                         return;
 		else
@@ -2758,7 +2423,7 @@ function EngInventory_RightClick_DeleteItemOverride()
 		itm = EngInventory_item_cache[bagnum][slotnum];
 
 		if ( (itm["itemlink_override_key"] ~= nil) and (EngInventoryConfig["item_overrides"][itm["itemlink_override_key"]] ~= nil) ) then
-			EngInventoryConfig["item_overrides"] = EngInventory_Table_RemoveKey(EngInventoryConfig["item_overrides"], itm["itemlink_override_key"] );
+			EngInventoryConfig["item_overrides"] = EngBags_Table_RemoveKey(EngInventoryConfig["item_overrides"], itm["itemlink_override_key"] );
 			HideDropDownMenu(1);
 			EngInventory_resort_required = ENGINVENTORY_MANDATORY;
 			-- resort will force a window redraw as well
@@ -2788,7 +2453,7 @@ end
 function EngInventory_frame_RightClickMenu_populate(level)
 	local bar, position, bagnum, slotnum;
 	local info, itm, barclass, tmp, checked, i;
-	local key, value, key2, value2;
+	local key, value, key2, value2, bplayer;
 
 
 	-------------------------------------------------------------------------------------------------
@@ -2812,20 +2477,20 @@ function EngInventory_frame_RightClickMenu_populate(level)
 			info = { ["disabled"] = 1 };
 			UIDropDownMenu_AddButton(info, level);
 
-			info = { ["text"] = "Current Category: "..itm["barClass"], ["notClickable"] = 1, ["isTitle"] = 1, ["notCheckable"] = nil };
+			info = { ["text"] = "Current Catagory: "..itm["barClass"], ["notClickable"] = 1, ["isTitle"] = 1, ["notCheckable"] = nil };
 			UIDropDownMenu_AddButton(info, level);
 
 			info = { ["disabled"] = 1 };
 			UIDropDownMenu_AddButton(info, level);
 
-			info = { ["text"] = "Assign item to category:", ["hasArrow"] = 1, ["value"] = "override_placement" };
+			info = { ["text"] = "Assign item to catagory:", ["hasArrow"] = 1, ["value"] = "override_placement" };
 			if (EngInventoryConfig["item_overrides"][itm["itemlink_override_key"]] ~= nil) then
 				info["checked"] = 1;
 			end
 			UIDropDownMenu_AddButton(info, level);
 
 			info = {
-				["text"] = "Use default category assignment",
+				["text"] = "Use default catagory assignment",
 				["value"] = { ["bagnum"]=bagnum, ["slotnum"]=slotnum },
 				["func"] = EngInventory_RightClick_DeleteItemOverride
 				};
@@ -2843,7 +2508,7 @@ function EngInventory_frame_RightClickMenu_populate(level)
 			end
 		elseif (level == 2) then
 			if ( this.value == "override_placement" ) then
-				for i = ENGINVENTORY_MAX_BARS, 1, -1 do
+				for i = EngBags_MAX_BARS, 1, -1 do
 					info = {
 						["text"] = "Catagories within bar "..i;
 						["value"] = { ["opt"]="override_placement_select", ["bagnum"]=bagnum, ["slotnum"]=slotnum, ["select_bar"]=i },
@@ -2944,9 +2609,9 @@ function EngInventory_frame_RightClickMenu_populate(level)
 		UIDropDownMenu_AddButton(info, level);
 
 		for key,value in {
-			[ENGINVENTORY_NOSORT] = "No sort",
-			[ENGINVENTORY_SORTBYNAME] = "Sort by name",
-			[ENGINVENTORY_SORTBYNAMEREV] = "Sort last words first"
+			[EngBags_NOSORT] = "No sort",
+			[EngBags_SORTBYNAME] = "Sort by name",
+			[EngBags_SORTBYNAMEREV] = "Sort last words first"
 			} do
 
 			if (EngInventoryConfig["bar_sort_"..bar] == key) then
@@ -2990,6 +2655,36 @@ function EngInventory_frame_RightClickMenu_populate(level)
 				["value"] = { ["bar"]=bar, ["value"]=key };
 				["func"] = function()
 						EngInventoryConfig["allow_new_in_bar_"..(this.value["bar"])] = (this.value["value"]);
+						EngInventory_resort_required = ENGINVENTORY_MANDATORY;
+						EngInventory_UpdateWindow();
+					end,
+				["checked"] = checked
+				};
+			UIDropDownMenu_AddButton(info, level);
+		end
+
+		info = { ["disabled"] = 1 };
+		UIDropDownMenu_AddButton(info, level);
+
+		info = { ["text"] = "Hide Bar:", ["notClickable"] = 1, ["isTitle"] = 1, ["notCheckable"] = nil };
+		UIDropDownMenu_AddButton(info, level);
+
+		for key,value in {
+			[0] = "Show Bar Items",
+			[1] = "Hide Bar items"
+			} do
+
+			if (EngInventoryConfig["hide_items_in_bar_"..bar] == key) then
+				checked = 1;
+			else
+				checked = nil;
+			end
+
+			info = {
+				["text"] = value;
+				["value"] = { ["bar"]=bar, ["value"]=key };
+				["func"] = function()
+						EngInventoryConfig["hide_items_in_bar_"..(this.value["bar"])] = (this.value["value"]);
 						EngInventory_resort_required = ENGINVENTORY_MANDATORY;
 						EngInventory_UpdateWindow();
 					end,
@@ -3083,6 +2778,7 @@ function EngInventory_frame_RightClickMenu_populate(level)
 				["func"] = function()
 						if (EngInventoryConfig["show_top_graphics"] == 0) then
 							EngInventoryConfig["show_top_graphics"] = 1;
+
 						else
 							EngInventoryConfig["show_top_graphics"] = 0;
 						end
@@ -3091,6 +2787,69 @@ function EngInventory_frame_RightClickMenu_populate(level)
 					end
 				};
 			if (EngInventoryConfig["show_top_graphics"] == 1) then
+				info["checked"] = 1;
+			end
+			UIDropDownMenu_AddButton(info, level);
+
+			info = {
+				["text"] = "Show Bank",
+				["value"] = nil,
+				["func"] = function()
+						EngBank_SlotCostFrame:Hide();
+						EngBank_PurchaseButton:Hide();
+						B4nkFrameBag1:Hide();
+						B4nkFrameBag2:Hide();
+						B4nkFrameBag3:Hide();
+						B4nkFrameBag4:Hide();
+						B4nkFrameBag5:Hide();
+						B4nkFrameBag6:Hide();
+						EngBags_UserDropdown:Show();
+						EngBank_frame:Show();
+					end
+				};
+			UIDropDownMenu_AddButton(info, level);
+
+			info = { ["disabled"] = 1 };
+			UIDropDownMenu_AddButton(info, level);
+
+			info = {
+				["text"] = "Hide Empty Bag Icons",
+				["value"] = nil,
+				["func"] = function()
+						if (EngInventoryConfig["hide_bag_icons"] == 0) then
+							EngInventoryConfig["hide_bag_icons"] = 1;
+							EngBags_Print("Empty Bag Icons Activated.");
+						else
+							EngInventoryConfig["hide_bag_icons"] = 0;
+							EngBags_Print("Empty Bag Icons Disabled.");
+						end
+
+						EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
+						EngInventory_UpdateWindow();
+					end
+				};
+			if (EngInventoryConfig["hide_bag_icons"] == 1) then
+				info["checked"] = 1;
+			end
+			UIDropDownMenu_AddButton(info, level);
+
+			info = {
+				["text"] = "Hide Empty Keyring Slots",
+				["value"] = nil,
+				["func"] = function()
+						if (EngInventoryConfig["hide_keyring_empty_slots"] == 0) then
+							EngInventoryConfig["hide_keyring_empty_slots"] = 1;
+						else
+							EngInventoryConfig["hide_keyring_empty_slots"] = 0;
+						end
+						-- Update the cache and resort items to clean up the empty icons correctly.
+						EngInventory_Update_item_cache();
+						EngInventory_Sort_item_cache();
+						EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
+						EngInventory_UpdateWindow();
+					end
+				};
+			if (EngInventoryConfig["hide_keyring_empty_slots"] == 1) then
 				info["checked"] = 1;
 			end
 			UIDropDownMenu_AddButton(info, level);
@@ -3104,7 +2863,7 @@ function EngInventory_frame_RightClickMenu_populate(level)
 				["func"] = function()
 						local bagnum, slotnum;
 
-						for bagnum = 0, 4 do
+						for index, bagnum in ipairs(EngInventory_Bags) do
 							if (EngInventoryConfig["show_Bag"..bagnum] == 1) then
 								if (table.getn(EngInventory_item_cache[bagnum]) > 0) then
 									for slotnum = 1, table.getn(EngInventory_item_cache[bagnum]) do
@@ -3120,6 +2879,19 @@ function EngInventory_frame_RightClickMenu_populate(level)
 					end
 				};
 			UIDropDownMenu_AddButton(info, level);
+
+			info = {
+				["text"] = "Reload bags",
+				["value"] = nil,
+				["func"] = function()
+						EngBagsItems[EngBags_PLAYERID] = {};
+						EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
+						EngInventory_UpdateWindow();
+						EngBags_Print("Bags reloaded.");
+					end
+				};
+			UIDropDownMenu_AddButton(info, level);
+
 
 			info = { ["disabled"] = 1 };
 			UIDropDownMenu_AddButton(info, level);
@@ -3146,18 +2918,28 @@ function EngInventory_frame_RightClickMenu_populate(level)
 
 			info = { ["disabled"] = 1 };
 			UIDropDownMenu_AddButton(info, level);
+
+			info = {
+				["text"] = "Import Config";
+				["value"] = { ["opt"]="import_config" },
+				["hasArrow"] = 1
+				};
+			UIDropDownMenu_AddButton(info, level);
+
+			info = { ["disabled"] = 1 };
+			UIDropDownMenu_AddButton(info, level);
 			
 
 			info = {
 				["text"] = "Background Color",
 				["hasColorSwatch"] = 1,
 				["hasOpacity"] = 1,
-				["r"] = EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_r"],
-				["g"] = EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_g"],
-				["b"] = EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_b"],
-				["opacity"] = EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_a"],
+				["r"] = EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_r"],
+				["g"] = EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_g"],
+				["b"] = EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_b"],
+				["opacity"] = EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_a"],
 				["notClickable"] = 1,
-				["value"] = { ["bar"]=ENGINVENTORY_MAINWINDOWCOLORIDX, ["element"] = "background" },
+				["value"] = { ["bar"]=EngBags_MAINWINDOWCOLORIDX, ["element"] = "background" },
 				["swatchFunc"] = EngInventory_SetNewColor,
 				["cancelFunc"] = EngInventory_SetNewColor,
 				["opacityFunc"] = EngInventory_SetNewColor
@@ -3167,15 +2949,22 @@ function EngInventory_frame_RightClickMenu_populate(level)
 				["text"] = "Border Color",
 				["hasColorSwatch"] = 1,
 				["hasOpacity"] = 1,
-				["r"] = EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_r"],
-				["g"] = EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_g"],
-				["b"] = EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_b"],
-				["opacity"] = EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_a"],
+				["r"] = EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_r"],
+				["g"] = EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_g"],
+				["b"] = EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_b"],
+				["opacity"] = EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_a"],
 				["notClickable"] = 1,
-				["value"] = { ["bar"]=ENGINVENTORY_MAINWINDOWCOLORIDX, ["element"] = "border" },
+				["value"] = { ["bar"]=EngBags_MAINWINDOWCOLORIDX, ["element"] = "border" },
 				["swatchFunc"] = EngInventory_SetNewColor,
 				["cancelFunc"] = EngInventory_SetNewColor,
 				["opacityFunc"] = EngInventory_SetNewColor
+				};
+			UIDropDownMenu_AddButton(info, level);
+			info = {
+				["isTitle"] = 1,
+				["text"] = "- UniRing EngBags v"..ENGBAGS_VERSION.." -",
+				["notClickable"] = 1,
+				["value"] = 0
 				};
 			UIDropDownMenu_AddButton(info, level);
 		elseif (level == 2) then
@@ -3200,6 +2989,29 @@ function EngInventory_frame_RightClickMenu_populate(level)
 						UIDropDownMenu_AddButton(info, level);
 					end
 				end
+				if (this.value["opt"] == "import_config") then
+					for key,value in EngBagsItems do
+						if ( EngBagsConfig["Inventory"][key] ~= nil ) then
+							info = {
+								["text"] = key;
+								["value"] = key;
+								["func"] = function()
+										EngBagsConfig["Inventory"][EngBags_PLAYERID] = EngBags_copyTable(EngBagsConfig["Inventory"][this.value]);
+										EngBagsConfig["Bank"][EngBags_PLAYERID] = EngBags_copyTable(EngBagsConfig["Bank"][this.value]);
+										EngInventory_SetDefaultValues(0);
+										EngBank_SetDefaultValues(0);
+										EngBagsItems[EngBags_PLAYERID] = {};
+										EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
+										EngBank_window_update_required = ENGINVENTORY_MANDATORY;
+										EngInventory_UpdateWindow();
+										EngBank_UpdateWindow();
+										EngBags_Print("Settings from ".. this.value .." loaded.");
+									end
+								};
+							UIDropDownMenu_AddButton(info, level);
+						end
+					end					
+				end
 			end
 		end
 	end
@@ -3213,7 +3025,7 @@ end
 
 
 function EngInventory_IncreaseColumns()
-	if (EngInventoryConfig["maxColumns"] < ENGINVENTORY_MAXCOLUMNS_MAX) then
+	if (EngInventoryConfig["maxColumns"] < EngBags_MAXCOLUMNS_MAX) then
 		EngInventoryConfig["maxColumns"] = EngInventoryConfig["maxColumns"] + 1;
 		EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
 		EngInventory_UpdateWindow();
@@ -3221,7 +3033,7 @@ function EngInventory_IncreaseColumns()
 end
 
 function EngInventory_DecreaseColumns()
-	if (EngInventoryConfig["maxColumns"] > ENGINVENTORY_MAXCOLUMNS_MIN) then
+	if (EngInventoryConfig["maxColumns"] > EngBags_MAXCOLUMNS_MIN) then
 		EngInventoryConfig["maxColumns"] = EngInventoryConfig["maxColumns"] - 1;
 		EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
 		EngInventory_UpdateWindow();
@@ -3265,17 +3077,17 @@ function EngInventory_AssignButtonsToFrame(barnum, currentbutton, frame, width, 
                         EngInventory_MoveAndSizeFrame("EngInventory_frame_Item_"..currentbutton, "BOTTOMRIGHT",
                                 frame, "BOTTOMRIGHT",
                                 0-(
-                                ((cur_x*ENGINVENTORY_BUTTONFRAME_WIDTH )+ENGINVENTORY_BUTTONFRAME_X_PADDING) + EngInventoryConfig["frameXSpace"]
+                                ((cur_x*EngBags_BUTTONFRAME_WIDTH )+EngBags_BUTTONFRAME_X_PADDING) + EngInventoryConfig["frameXSpace"]
                                 ),
-                                ((cur_y*ENGINVENTORY_BUTTONFRAME_HEIGHT)+ENGINVENTORY_BUTTONFRAME_Y_PADDING) + EngInventoryConfig["frameYSpace"],
-                                ENGINVENTORY_BUTTONFRAME_BUTTONWIDTH,
-                                ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT );
+                                ((cur_y*EngBags_BUTTONFRAME_HEIGHT)+EngBags_BUTTONFRAME_Y_PADDING) + EngInventoryConfig["frameYSpace"],
+                                EngBags_BUTTONFRAME_BUTTONWIDTH,
+                                EngBags_BUTTONFRAME_BUTTONHEIGHT );
                         EngInventory_MoveAndSizeFrame("EngInventory_frame_Item_"..currentbutton.."_bkgr", "TOPLEFT",
                                 "EngInventory_frame_Item_"..currentbutton, "TOPLEFT",
-                                0-ENGINVENTORY_BUTTONFRAME_X_PADDING,
-                                ENGINVENTORY_BUTTONFRAME_Y_PADDING,
-                                ENGINVENTORY_BKGRFRAME_WIDTH,
-                                ENGINVENTORY_BKGRFRAME_HEIGHT );
+                                0-EngBags_BUTTONFRAME_X_PADDING,
+                                EngBags_BUTTONFRAME_Y_PADDING,
+                                EngBags_BKGRFRAME_WIDTH,
+                                EngBags_BKGRFRAME_HEIGHT );
 
                         EngInventory_buttons["EngInventory_frame_Item_"..currentbutton] = { ["bar"]=barnum, ["position"]=position, ["bagnum"]=bagnum, ["slotnum"]=slotnum };
                         EngInventory_UpdateButton( getglobal("EngInventory_frame_Item_"..currentbutton), EngInventory_item_cache[bagnum][slotnum] );
@@ -3295,17 +3107,17 @@ function EngInventory_AssignButtonsToFrame(barnum, currentbutton, frame, width, 
                 EngInventory_MoveAndSizeFrame("EngInventory_frame_SlotTarget_"..barnum, "BOTTOMRIGHT",
                         frame, "BOTTOMRIGHT",
                         0-(
-                        (((width-1)*ENGINVENTORY_BUTTONFRAME_WIDTH )+ENGINVENTORY_BUTTONFRAME_X_PADDING) + EngInventoryConfig["frameXSpace"]
+                        (((width-1)*EngBags_BUTTONFRAME_WIDTH )+EngBags_BUTTONFRAME_X_PADDING) + EngInventoryConfig["frameXSpace"]
                         ),
-                        (((height-1)*ENGINVENTORY_BUTTONFRAME_HEIGHT)+ENGINVENTORY_BUTTONFRAME_Y_PADDING) + EngInventoryConfig["frameYSpace"],
-                        ENGINVENTORY_BUTTONFRAME_BUTTONWIDTH,
-                        ENGINVENTORY_BUTTONFRAME_BUTTONHEIGHT );
+                        (((height-1)*EngBags_BUTTONFRAME_HEIGHT)+EngBags_BUTTONFRAME_Y_PADDING) + EngInventoryConfig["frameYSpace"],
+                        EngBags_BUTTONFRAME_BUTTONWIDTH,
+                        EngBags_BUTTONFRAME_BUTTONHEIGHT );
                 EngInventory_MoveAndSizeFrame("EngInventory_frame_SlotTarget_"..barnum.."_bkgr", "TOPLEFT",
                         "EngInventory_frame_SlotTarget_"..barnum, "TOPLEFT",
-                        0-ENGINVENTORY_BUTTONFRAME_X_PADDING,
-                        ENGINVENTORY_BUTTONFRAME_Y_PADDING,
-                        ENGINVENTORY_BKGRFRAME_WIDTH,
-                        ENGINVENTORY_BKGRFRAME_HEIGHT );
+                        0-EngBags_BUTTONFRAME_X_PADDING,
+                        EngBags_BUTTONFRAME_Y_PADDING,
+                        EngBags_BKGRFRAME_WIDTH,
+                        EngBags_BKGRFRAME_HEIGHT );
                 
                 tmpframe = getglobal("EngInventory_frame_SlotTarget_"..barnum.."_BigText");
                 tmpframe:SetText( barnum );
@@ -3319,6 +3131,8 @@ end
 
 EngInventory_WindowIsUpdating = 0;
 function EngInventory_UpdateWindow()
+	
+
         local frame = getglobal("EngInventory_frame");
         
         local currentbutton, barnum, slotnum;
@@ -3326,7 +3140,7 @@ function EngInventory_UpdateWindow()
         local calc_dat, tmpcalc, cur_y;
         local available_width, width_in_between, mid_point;
 
-        EngInventory_PrintDEBUG("ei: UpdateWindow()  WindowIsUpdating="..EngInventory_WindowIsUpdating );
+        EngBags_PrintDEBUG("ei: UpdateWindow()  WindowIsUpdating="..EngInventory_WindowIsUpdating );
 
         if (EngInventory_WindowIsUpdating == 1) then
                 return;
@@ -3337,6 +3151,12 @@ function EngInventory_UpdateWindow()
                 EngInventory_WindowIsUpdating = 0;
                 return;
         end
+
+
+	if ( not frame:IsVisible() ) then
+		EngInventory_WindowIsUpdating = 0;
+	return;
+	end
 
         EngInventory_Update_item_cache();
 	if (EngInventory_resort_required == ENGINVENTORY_MANDATORY) then
@@ -3353,7 +3173,7 @@ function EngInventory_UpdateWindow()
 
 		currentbutton = 1;
 		cur_y = EngInventoryConfig["frameYSpace"] + EngInventory_WindowBottomPadding;
-		for barnum = 1, ENGINVENTORY_MAX_BARS, 3 do
+		for barnum = 1, EngBags_MAX_BARS, 3 do
 			barframe_one = getglobal("EngInventory_frame_bar_"..barnum);
 			barframe_two = getglobal("EngInventory_frame_bar_"..(barnum+1));
 			barframe_three = getglobal("EngInventory_frame_bar_"..(barnum+2));
@@ -3409,21 +3229,21 @@ function EngInventory_UpdateWindow()
 			repeat
 				calc_dat["height"] = calc_dat["height"] + 1;
 				tmpcalc = 0;
-				if (calc_dat["first"] > 0) then
+				if (calc_dat["first"] > 0 and (EngInventoryConfig["hide_items_in_bar_"..(barnum)] == 0 or EngInventory_edit_mode == 1)) then
 					if (calc_dat["first_heighttable"][calc_dat["height"]]) then
 						tmpcalc = tmpcalc + calc_dat["first_heighttable"][calc_dat["height"]];
 					else
 						tmpcalc = tmpcalc + 1;
 					end
 				end
-				if (calc_dat["second"] >        0) then
+				if (calc_dat["second"] > 0 and (EngInventoryConfig["hide_items_in_bar_"..(barnum+1)] == 0 or EngInventory_edit_mode == 1)) then
 					if (calc_dat["second_heighttable"][calc_dat["height"]]) then
 						tmpcalc = tmpcalc + calc_dat["second_heighttable"][calc_dat["height"]];
 					else
 						tmpcalc = tmpcalc + 1;
 					end
 				end
-				if (calc_dat["third"] > 0) then
+				if (calc_dat["third"] > 0 and (EngInventoryConfig["hide_items_in_bar_"..(barnum+2)] == 0 or EngInventory_edit_mode == 1)) then
 					if (calc_dat["third_heighttable"][calc_dat["height"]]) then
 						tmpcalc = tmpcalc + calc_dat["third_heighttable"][calc_dat["height"]];
 					else
@@ -3466,6 +3286,22 @@ function EngInventory_UpdateWindow()
 				end
 			end
 
+			-- If the bar is hidden, the height and width for that bar is 0. (out of edit mode)
+			if (EngInventory_edit_mode == 0) then
+				if (EngInventoryConfig["hide_items_in_bar_"..(barnum)] == 1) then
+					calc_dat["first_height"] = 0;
+					calc_dat["first_width"] = 0;
+				end
+				if (EngInventoryConfig["hide_items_in_bar_"..(barnum+1)] == 1) then
+					calc_dat["second_height"] = 0;
+					calc_dat["second_width"] = 0;
+				end
+				if (EngInventoryConfig["hide_items_in_bar_"..(barnum+2)] == 1) then
+					calc_dat["third_height"] = 0;
+					calc_dat["third_width"] = 0;
+				end
+			end
+
 			--- now we know the size and height of all 3 bars for this line
 
 			if (calc_dat["height"] == 0) then
@@ -3474,16 +3310,17 @@ function EngInventory_UpdateWindow()
 				barframe_two:Hide();
 				barframe_three:Hide();
 			else
-				available_width = (EngInventoryConfig["maxColumns"]*ENGINVENTORY_BUTTONFRAME_WIDTH) + (10*EngInventoryConfig["frameXSpace"]);
+				available_width = (EngInventoryConfig["maxColumns"]*EngBags_BUTTONFRAME_WIDTH) + (10*EngInventoryConfig["frameXSpace"]);
 
 				------------------------------------------------------------------------------------------
 				--------- FIRST BAR
+				if (calc_dat["first_width"] > 0) then
 				EngInventory_MoveAndSizeFrame("EngInventory_frame_bar_"..barnum, "BOTTOMRIGHT",
 					"EngInventory_frame", "BOTTOMRIGHT",
 					0-EngInventoryConfig["frameXSpace"],
 					cur_y,
-					(calc_dat["first_width"]*ENGINVENTORY_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"]),
-					(calc_dat["height"]*ENGINVENTORY_BUTTONFRAME_HEIGHT)+(2*EngInventoryConfig["frameYSpace"]) );
+					(calc_dat["first_width"]*EngBags_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"]),
+					(calc_dat["height"]*EngBags_BUTTONFRAME_HEIGHT)+(2*EngInventoryConfig["frameYSpace"]) );
 				barframe_one:SetBackdropColor(
 					EngInventoryConfig["bar_colors_"..barnum.."_background_r"],
 					EngInventoryConfig["bar_colors_"..barnum.."_background_g"],
@@ -3494,26 +3331,29 @@ function EngInventory_UpdateWindow()
 					EngInventoryConfig["bar_colors_"..barnum.."_border_g"],
 					EngInventoryConfig["bar_colors_"..barnum.."_border_b"],
 					EngInventoryConfig["bar_colors_"..barnum.."_border_a"] );
+				else
+					barframe_one:Hide();
+				end
 
 				------------------------------------------------------------------------------------------
 				--------- SECOND BAR
 				if (calc_dat["second_width"] > 0) then
 					width_in_between = available_width - (
 						(EngInventoryConfig["frameXSpace"] * 4) +       -- border on both sides + borders between frames
-						((calc_dat["first_width"]*ENGINVENTORY_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"])) +      -- bar 1 size
-						((calc_dat["third_width"]*ENGINVENTORY_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"]))        -- bar 3 size
+						((calc_dat["first_width"]*EngBags_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"])) +      -- bar 1 size
+						((calc_dat["third_width"]*EngBags_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"]))        -- bar 3 size
 						);
 					mid_point = (width_in_between/2) +
-						((calc_dat["first_width"]*ENGINVENTORY_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"])) +
+						((calc_dat["first_width"]*EngBags_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"])) +
 						(EngInventoryConfig["frameXSpace"] * 2);
 
 
 					EngInventory_MoveAndSizeFrame("EngInventory_frame_bar_"..(barnum+1), "BOTTOMRIGHT",
 						"EngInventory_frame", "BOTTOMRIGHT",
-						0-( mid_point - (((calc_dat["second_width"]*ENGINVENTORY_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"]))/2) ),
+						0-( mid_point - (((calc_dat["second_width"]*EngBags_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"]))/2) ),
 						cur_y,
-						(calc_dat["second_width"]*ENGINVENTORY_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"]),
-						(calc_dat["height"]*ENGINVENTORY_BUTTONFRAME_HEIGHT)+(2*EngInventoryConfig["frameYSpace"]) );
+						(calc_dat["second_width"]*EngBags_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"]),
+						(calc_dat["height"]*EngBags_BUTTONFRAME_HEIGHT)+(2*EngInventoryConfig["frameYSpace"]) );
 					barframe_two:SetBackdropColor(
 						EngInventoryConfig["bar_colors_"..(barnum+1).."_background_r"],
 						EngInventoryConfig["bar_colors_"..(barnum+1).."_background_g"],
@@ -3530,12 +3370,13 @@ function EngInventory_UpdateWindow()
 
 				------------------------------------------------------------------------------------------
 				--------- THIRD BAR
+				if (calc_dat["third_width"] > 0) then
 				EngInventory_MoveAndSizeFrame("EngInventory_frame_bar_"..(barnum+2), "BOTTOMRIGHT",
 					"EngInventory_frame", "BOTTOMRIGHT",
-					(0-available_width) +(calc_dat["third_width"]*ENGINVENTORY_BUTTONFRAME_WIDTH)+(3*EngInventoryConfig["frameXSpace"]),
+					(0-available_width) +(calc_dat["third_width"]*EngBags_BUTTONFRAME_WIDTH)+(3*EngInventoryConfig["frameXSpace"]),
 					cur_y,
-					(calc_dat["third_width"]*ENGINVENTORY_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"]),
-					(calc_dat["height"]*ENGINVENTORY_BUTTONFRAME_HEIGHT)+(2*EngInventoryConfig["frameYSpace"]) );
+					(calc_dat["third_width"]*EngBags_BUTTONFRAME_WIDTH)+(2*EngInventoryConfig["frameXSpace"]),
+					(calc_dat["height"]*EngBags_BUTTONFRAME_HEIGHT)+(2*EngInventoryConfig["frameYSpace"]) );
 				barframe_three:SetBackdropColor(
 					EngInventoryConfig["bar_colors_"..(barnum+2).."_background_r"],
 					EngInventoryConfig["bar_colors_"..(barnum+2).."_background_g"],
@@ -3546,19 +3387,28 @@ function EngInventory_UpdateWindow()
 					EngInventoryConfig["bar_colors_"..(barnum+2).."_border_g"],
 					EngInventoryConfig["bar_colors_"..(barnum+2).."_border_b"],
 					EngInventoryConfig["bar_colors_"..(barnum+2).."_border_a"] );
+				else
+					barframe_three:Hide();
+				end
 
 				-----
+				if (EngInventoryConfig["hide_items_in_bar_"..(barnum)] == 0 or EngInventory_edit_mode == 1) then
 				currentbutton = EngInventory_AssignButtonsToFrame(barnum, currentbutton,
 					"EngInventory_frame_bar_"..(barnum),
 					calc_dat["first_width"], calc_dat["height"] );
+				end
+				if (EngInventoryConfig["hide_items_in_bar_"..(barnum+1)] == 0 or EngInventory_edit_mode == 1) then
 				currentbutton = EngInventory_AssignButtonsToFrame(barnum+1, currentbutton,
 					"EngInventory_frame_bar_"..(barnum+1),
 					calc_dat["second_width"], calc_dat["height"] );
+				end
+				if (EngInventoryConfig["hide_items_in_bar_"..(barnum+2)] == 0 or EngInventory_edit_mode == 1) then
 				currentbutton = EngInventory_AssignButtonsToFrame(barnum+2, currentbutton,
 					"EngInventory_frame_bar_"..(barnum+2),
 					calc_dat["third_width"], calc_dat["height"] );
+				end
 
-				cur_y = cur_y + (calc_dat["height"]*ENGINVENTORY_BUTTONFRAME_HEIGHT)+(3*EngInventoryConfig["frameYSpace"]);
+				cur_y = cur_y + (calc_dat["height"]*EngBags_BUTTONFRAME_HEIGHT)+(3*EngInventoryConfig["frameYSpace"]);
 			end
 		end
 
@@ -3572,16 +3422,61 @@ function EngInventory_UpdateWindow()
 			end
 		end
 
-		local new_width = (EngInventoryConfig["maxColumns"]*ENGINVENTORY_BUTTONFRAME_WIDTH) + (10*EngInventoryConfig["frameXSpace"]);
+		local new_width = (EngInventoryConfig["maxColumns"]*EngBags_BUTTONFRAME_WIDTH) + (10*EngInventoryConfig["frameXSpace"]);
 		local new_height;
 		
 		if (EngInventoryConfig["show_top_graphics"] == 1) then
 			new_height = cur_y + ENGINVENTORY_TOP_PADWINDOW;
+			if (EngInventoryConfig["frameButtonSize"]==35) then
+				EngInventory_Button_Close:SetScale(0.9);
+				EngInventory_Button_MoveLockToggle:SetScale(0.9);
+				EngInventory_Button_ChangeEditMode:SetScale(0.9);
+				EngInventory_Button_HighlightToggle:SetScale(0.9);
+				Ch4racterBagSlot1:SetScale(0.9);
+				Ch4racterBagSlot2:SetScale(0.9);
+				Ch4racterBagSlot3:SetScale(0.9);
+				Ch4racterBagSlot4:SetScale(0.9);
+			elseif (EngInventoryConfig["frameButtonSize"]==30) then
+				EngInventory_Button_Close:SetScale(0.8);
+				EngInventory_Button_MoveLockToggle:SetScale(0.8);
+				EngInventory_Button_ChangeEditMode:SetScale(0.8);
+				EngInventory_Button_HighlightToggle:SetScale(0.8);
+				Ch4racterBagSlot1:SetScale(0.8);
+				Ch4racterBagSlot2:SetScale(0.8);
+				Ch4racterBagSlot3:SetScale(0.8);
+				Ch4racterBagSlot4:SetScale(0.8);
+			elseif (EngInventoryConfig["frameButtonSize"]==20) then
+				EngInventory_Button_Close:SetScale(0.7);
+				EngInventory_Button_MoveLockToggle:SetScale(0.7);
+				EngInventory_Button_ChangeEditMode:SetScale(0.7);
+				EngInventory_Button_HighlightToggle:SetScale(0.7);
+				Ch4racterBagSlot1:SetScale(0.7);
+				Ch4racterBagSlot2:SetScale(0.7);
+				Ch4racterBagSlot3:SetScale(0.7);
+				Ch4racterBagSlot4:SetScale(0.7);
+			else
+				EngInventory_Button_Close:SetScale(1);
+				EngInventory_Button_MoveLockToggle:SetScale(1);
+				EngInventory_Button_ChangeEditMode:SetScale(1);
+				EngInventory_Button_HighlightToggle:SetScale(1);
+				Ch4racterBagSlot1:SetScale(1);
+				Ch4racterBagSlot2:SetScale(1);
+				Ch4racterBagSlot3:SetScale(1);
+				Ch4racterBagSlot4:SetScale(1);
+			end
 		else
-			new_height = cur_y;
+			new_height = cur_y + 25;
+			EngInventory_Button_Close:SetScale(1);
+			EngInventory_Button_MoveLockToggle:SetScale(1);
+			EngInventory_Button_ChangeEditMode:SetScale(1);
+			EngInventory_Button_HighlightToggle:SetScale(1);
+			Ch4racterBagSlot1:SetScale(1);
+			Ch4racterBagSlot2:SetScale(1);
+			Ch4racterBagSlot3:SetScale(1);
+			Ch4racterBagSlot4:SetScale(1);
 		end
 
-		frame:SetScale(EngInventoryConfig["frameWindowScale"]);
+--		frame:SetScale(EngBagsConfig["frameWindowScale"]);
 		frame:SetWidth( new_width );
 		frame:SetHeight( new_height );
 
@@ -3592,15 +3487,15 @@ function EngInventory_UpdateWindow()
 			EngInventoryConfig["frame"..EngInventoryConfig["frameYRelativeTo"]] / frame:GetScale());
 
 		frame:SetBackdropColor(
-			EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_r"],
-			EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_g"],
-			EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_b"],
-			EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_a"] );
+			EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_r"],
+			EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_g"],
+			EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_b"],
+			EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_a"] );
 		frame:SetBackdropBorderColor(
-			EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_r"],
-			EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_g"],
-			EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_b"],
-			EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_a"] );
+			EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_r"],
+			EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_g"],
+			EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_b"],
+			EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_a"] );
 
 		EngInventory_MoneyFrame:Show();
 
@@ -3617,16 +3512,46 @@ function EngInventory_UpdateWindow()
 		if (EngInventoryConfig["show_top_graphics"] == 1) then
 			EngInventory_Button_Close:Show();
 			EngInventory_Button_MoveLockToggle:Show();
-			EngInventory_MoneyFrame:Show();
 			EngInventory_Button_ChangeEditMode:Show();
 			EngInventory_Button_HighlightToggle:Show();
+
+			--EngInventory_framePortrait:Show();
+			--EngInventory_frameTextureTopLeft:Show();
+			--EngInventory_frameTextureTopCenter:Show();
+			--EngInventory_frameTextureTopRight:Show();
+			--EngInventory_frameTextureLeft:Show();
+--			--EngInventory_frameTextureCenter:Show();
+			--EngInventory_frameTextureRight:Show();
+			--EngInventory_frameTextureBottomLeft:Show();
+			--EngInventory_frameTextureBottomCenter:Show();
+			--EngInventory_frameTextureBottomRight:Show();
+			EngInventory_framePortrait:Hide();
+			EngInventory_frameTextureTopLeft:Hide();
+			EngInventory_frameTextureTopCenter:Hide();
+			EngInventory_frameTextureTopRight:Hide();
+			EngInventory_frameTextureLeft:Hide();
+--			EngInventory_frameTextureCenter:Hide();
+			EngInventory_frameTextureRight:Hide();
+			EngInventory_frameTextureBottomLeft:Hide();
+			EngInventory_frameTextureBottomCenter:Hide();
+			EngInventory_frameTextureBottomRight:Hide();
 		else
 			-- hide all the top graphics
 			EngInventory_Button_Close:Hide();
 			EngInventory_Button_MoveLockToggle:Hide();
-			EngInventory_MoneyFrame:Hide();
 			EngInventory_Button_ChangeEditMode:Hide();
 			EngInventory_Button_HighlightToggle:Hide();
+
+			EngInventory_framePortrait:Hide();
+			EngInventory_frameTextureTopLeft:Hide();
+			EngInventory_frameTextureTopCenter:Hide();
+			EngInventory_frameTextureTopRight:Hide();
+			EngInventory_frameTextureLeft:Hide();
+--			EngInventory_frameTextureCenter:Hide();
+			EngInventory_frameTextureRight:Hide();
+			EngInventory_frameTextureBottomLeft:Hide();
+			EngInventory_frameTextureBottomCenter:Hide();
+			EngInventory_frameTextureBottomRight:Hide();
 		end
 	end
 
@@ -3634,4 +3559,18 @@ function EngInventory_UpdateWindow()
 
         EngInventory_WindowIsUpdating = 0;
 end
-
+function EngInventory_UpdateBagState()
+        local shouldBeChecked = EngInventory_frame:IsVisible();
+	if (EngInventoryConfig["hook_Bag0"] == 1) then
+	        MainMenuBarBackpackButton:SetChecked(shouldBeChecked);
+	end
+        local bagButton = nil;
+        for i = 0, 3 do 
+		if (EngInventoryConfig["hook_Bag"..(i+1)] == 1) then
+			bagButton = getglobal("CharacterBag"..i.."Slot");
+			if ( bagButton ) then
+				bagButton:SetChecked(shouldBeChecked);
+			end
+		end
+        end
+end

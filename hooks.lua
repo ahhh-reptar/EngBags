@@ -1,65 +1,58 @@
-
-
-EngInventory_hookfunctions = {
+﻿EngBank_hookfunctions = {
 	"BagSlotButton_OnClick",
 	"BagSlotButton_OnDrag",
 	"CloseAllWindows",
-	"OpenAllBags",
-	"OpenBackpack",
-	"CloseBackpack",
-	"ToggleBackpack",
-	"OpenBag",
-	"CloseBag",
-	"ToggleBag",
 	"ToggleDropDownMenu"
-};
-EngInventory_savedhookfunctions = {};
+	};
+
+
+EngBank_savedhookfunctions = {};
 
 
 -- reg :
-ENGINVENTORY_HOOKS_UNREGISTER = 0;
-ENGINVENTORY_HOOKS_REGISTER = 1;
-ENGINVENTORY_HOOKS_CHECK = 2;
+EngBank_HOOKS_UNREGISTER = 0;
+EngBank_HOOKS_REGISTER = 1;
+EngBank_HOOKS_CHECK = 2;
 --
-function EngInventory_RegisterHooks(reg)
+function EngBank_RegisterHooks(reg)
 	local func, func2;
 
 	if (reg == 1) then
-		for i = 1, table.getn(EngInventory_hookfunctions) do
-			func = getglobal( "EngInventory_hook_"..EngInventory_hookfunctions[i] );
+		for i = 1, table.getn(EngBank_hookfunctions) do
+			func = getglobal( "EngBank_hook_"..EngBank_hookfunctions[i] );
 
 			if (func) then
-				EngInventory_savedhookfunctions[ EngInventory_hookfunctions[i] ] = getglobal( EngInventory_hookfunctions[i] );
-				setglobal( EngInventory_hookfunctions[i], func);
+				EngBank_savedhookfunctions[ EngBank_hookfunctions[i] ] = getglobal( EngBank_hookfunctions[i] );
+				setglobal( EngBank_hookfunctions[i], func);
 
-				EngInventory_PrintDEBUG("Hook function for '"..EngInventory_hookfunctions[i].." installed.");
+				EngBags_PrintDEBUG("Hook function for '"..EngBank_hookfunctions[i].." installed.");
 			else
-				EngInventory_PrintDEBUG("** Hook function for '"..EngInventory_hookfunctions[i].." SKIPPED **");
+				EngBags_PrintDEBUG("** Hook function for '"..EngBank_hookfunctions[i].." SKIPPED **");
 			end
 		end
 	elseif (reg == 0) then
 		-- unregister hooks
-		for i = 1, table.getn(EngInventory_hookfunctions) do
-			func = getglobal( "EngInventory_hook_"..EngInventory_hookfunctions[i] );
+		for i = 1, table.getn(EngBank_hookfunctions) do
+			func = getglobal( "EngBank_hook_"..EngBank_hookfunctions[i] );
 
-			if ( (func) and (EngInventory_savedhookfunctions[EngInventory_hookfunctions[i]]) ) then
-				setglobal( EngInventory_hookfunctions[i], EngInventory_savedhookfunctions[EngInventory_hookfunctions[i]]);
-				EngInventory_savedhookfunctions[EngInventory_hookfunctions[i]] = nil;
+			if ( (func) and (EngBank_savedhookfunctions[EngBank_hookfunctions[i]]) ) then
+				setglobal( EngBank_hookfunctions[i], EngBank_savedhookfunctions[EngBank_hookfunctions[i]]);
+				EngBank_savedhookfunctions[EngBank_hookfunctions[i]] = nil;
 
-				EngInventory_PrintDEBUG("Hook function for '"..EngInventory_hookfunctions[i].." removed.");
+				EngBags_PrintDEBUG("Hook function for '"..EngBank_hookfunctions[i].." removed.");
 			end
 		end
 	elseif (reg == 2) then
 		-- check if hooks are registered
-		EngInventory_Print( "EngInventory hooks:" ,1,1,0.2 );
-		for i = 1, table.getn(EngInventory_hookfunctions) do
-			func = getglobal( "EngInventory_hook_"..EngInventory_hookfunctions[i] );
-			func2 = getglobal( EngInventory_hookfunctions[i] );
+		EngBags_Print( "EngBank hooks:" ,1,1,0.2 );
+		for i = 1, table.getn(EngBank_hookfunctions) do
+			func = getglobal( "EngBank_hook_"..EngBank_hookfunctions[i] );
+			func2 = getglobal( EngBank_hookfunctions[i] );
 
 			if ( func == func2 ) then
-				EngInventory_Print( "  "..EngInventory_hookfunctions[i].." is hooked properly." ,0,1,0.25 );
+				EngBags_Print( "  "..EngBank_hookfunctions[i].." is hooked properly." ,0,1,0.25 );
 			else
-				EngInventory_Print( "  "..EngInventory_hookfunctions[i].." is NOT hooked." ,1,0.2,0.2 );
+				EngBags_Print( "  "..EngBank_hookfunctions[i].." is NOT hooked." ,1,0.2,0.2 );
 			end
 		end
 	end
@@ -67,9 +60,9 @@ function EngInventory_RegisterHooks(reg)
 end
 
 
-function EngInventory_OpenOrClose(opt)
+function EngBank_OpenOrClose(opt)
 	if ( opt == "toggle" ) then
-		if (EngInventory_frame:IsVisible()) then
+		if (EngBank_frame:IsVisible()) then
 			opt = "close";
 		else
 			opt = "open";
@@ -77,112 +70,45 @@ function EngInventory_OpenOrClose(opt)
 	end
 
 	if ( opt == "open" ) then
-		EngInventory_resort_required = ENGINVENTORY_MANDATORY;
-		EngInventory_edit_mode = 0;
-		EngInventory_frame:Show();
+		EngBank_resort_required = EngBank_MANDATORY;
+		EngBank_edit_mode = 0;
+		EngBank_frame:Show();
 	elseif ( opt == "close" ) then
-		EngInventory_frame:Hide();
+		EngBank_frame:Hide();
 	end
 end
 
 
-function EngInventory_hook_BagSlotButton_OnClick()
-	EngInventory_PrintDEBUG("event: BagSlotButton_OnClick()");
-	EngInventory_savedhookfunctions["BagSlotButton_OnClick"]();
-	EngInventory_UpdateWindow();
+function EngBank_hook_BagSlotButton_OnClick()
+	EngBags_PrintDEBUG("event: BagSlotButton_OnClick()");
+	EngBank_savedhookfunctions["BagSlotButton_OnClick"]();
+	EngBank_UpdateWindow();
 end
 
-function EngInventory_hook_BagSlotButton_OnDrag()
-	EngInventory_savedhookfunctions["BagSlotButton_OnDrag"]();
-	EngInventory_PrintDEBUG("event: BagSlotButton_OnDrag()");
-	EngInventory_UpdateWindow();
+function EngBank_hook_BagSlotButton_OnDrag()
+	EngBank_savedhookfunctions["BagSlotButton_OnDrag"]();
+	EngBags_PrintDEBUG("event: BagSlotButton_OnDrag()");
+	EngBank_UpdateWindow();
 end
 
-function EngInventory_hook_CloseAllWindows()
-	EngInventory_PrintDEBUG("event: CloseAllWindows()");
+function EngBank_hook_CloseAllWindows()
+	EngBags_PrintDEBUG("event: CloseAllWindows()");
 
-	local itemsVisible = EngInventory_savedhookfunctions["CloseAllWindows"]();
-	local engVisible = EngInventory_frame:IsVisible();
+	local itemsVisible = EngBank_savedhookfunctions["CloseAllWindows"]();
+	local engVisible = EngBank_frame:IsVisible();
 	
 	if (engVisible) then
-		EngInventory_OpenOrClose("close");
+		EngBank_OpenOrClose("close");
 	end
+	CloseBankFrame();
 	return (itemsVisible or engVisible);
 end
 
-function EngInventory_hook_OpenAllBags()
-	local engVisible = EngInventory_frame:IsVisible();
-	if (EngInventoryConfig["hook_OpenAllBags"]==1) then
-		if not (engVisible) then
-			EngInventory_OpenOrClose("open");
-		else
-			EngInventory_OpenOrClose("close");
-		end
-	else
-		EngInventory_savedhookfunctions["OpenAllBags"]();
-	end
-	EngInventory_PrintDEBUG("event: OpenAllBags()");
-end
 
-function EngInventory_hook_OpenBackpack()
-	if (EngInventoryConfig["hook_Bag0"]==1) then
-		EngInventory_OpenOrClose("open");
-	else
-		EngInventory_savedhookfunctions["OpenBackpack"]();
-	end
-	EngInventory_PrintDEBUG("event: OpenBackpack()");
-end
+function EngBank_hook_ToggleDropDownMenu(level, value, dropDownFrame, anchorName, xOffset, yOffset)
+	EngBags_PrintDEBUG("event: ToggleDropDownMenu()");
 
-function EngInventory_hook_CloseBackpack()
-	if (EngInventoryConfig["hook_Bag0"]==1) then
-		EngInventory_OpenOrClose("close");
-	else
-		EngInventory_savedhookfunctions["CloseBackpack"]();
-	end
-	EngInventory_PrintDEBUG("event: CloseBackpack()");
-end
-
-function EngInventory_hook_ToggleBackpack()
-	if (EngInventoryConfig["hook_Bag0"]==1) then
-		EngInventory_OpenOrClose("toggle");
-	else
-		EngInventory_savedhookfunctions["ToggleBackpack"]();
-	end
-	EngInventory_PrintDEBUG("event: ToggleBackpack()");
-end
-
-function EngInventory_hook_OpenBag(bag)
-	if ( (bag >= 0) and (bag <= 4) and (EngInventoryConfig["hook_Bag"..bag]==1) ) then
-		EngInventory_OpenOrClose("Open");
-	else
-		EngInventory_savedhookfunctions["OpenBag"](bag);
-	end
-	EngInventory_PrintDEBUG("event: OpenBag()");
-end
-
-function EngInventory_hook_CloseBag(bag)
-	if ( (bag >= 0) and (bag <= 4) and (EngInventoryConfig["hook_Bag"..bag]==1) ) then
-		EngInventory_OpenOrClose("close");
-	else
-		EngInventory_savedhookfunctions["CloseBag"](bag);
-	end
-	EngInventory_PrintDEBUG("event: CloseBag()");
-end
-
-function EngInventory_hook_ToggleBag(bag)
-	if ( (bag >= 0) and (bag <= 4) and (EngInventoryConfig["hook_Bag"..bag]==1) ) then
-		EngInventory_OpenOrClose("toggle");
-	else
-		EngInventory_savedhookfunctions["ToggleBag"](bag);
-	end
-	EngInventory_PrintDEBUG("event: ToggleBag()");
-end
-
-
-function EngInventory_hook_ToggleDropDownMenu(level, value, dropDownFrame, anchorName, xOffset, yOffset)
-	EngInventory_PrintDEBUG("event: ToggleDropDownMenu()");
-
-	EngInventory_savedhookfunctions["ToggleDropDownMenu"](level, value, dropDownFrame, anchorName, xOffset, yOffset);
+	EngBank_savedhookfunctions["ToggleDropDownMenu"](level, value, dropDownFrame, anchorName, xOffset, yOffset);
 
 	local frame = getglobal("DropDownList"..UIDROPDOWNMENU_MENU_LEVEL);	
 
@@ -205,7 +131,7 @@ function EngInventory_hook_ToggleDropDownMenu(level, value, dropDownFrame, ancho
 	end
 
 	if ( (adjustY ~= 0) or (adjustX ~= 0) ) then
-		EngInventory_PrintDEBUG("ToggleDropDownMenu() - adjusting window position by "..adjustX..", "..adjustY);
+		EngBags_PrintDEBUG("ToggleDropDownMenu() - adjusting window position by "..adjustX..", "..adjustY);
 
 		adjustX = frame:GetLeft() + adjustX;
 		adjustY = frame:GetTop() + adjustY;

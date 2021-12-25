@@ -4,11 +4,11 @@
 	<Script file="support_funcs.lua"/> 
 	<Script file="chat_cmd_handler.lua"/> 
 	<Script file="enginventory.lua"/> 
-	<Script file="hooks.lua"/>
+	<Script file="ei_hooks.lua"/>
 	<Script file="localization.lua"/>
 
 
-		<CheckButton name="EngBagSlotButtonTemplate" inherits="PaperDollItemSlotButtonTemplate" virtual="true">
+		<CheckButton name="EngInventorySlotButtonTemplate" inherits="PaperDollItemSlotButtonTemplate" virtual="true">
 		<Frames>
 			<Model name="$parentItemAnim" inherits="ItemAnimTemplate">
 				<Anchors>
@@ -22,17 +22,18 @@
 		</Frames>
 		<Scripts>
 			<OnLoad>
-				EngPaperDollItemSlotButton_OnLoad();
 				this:RegisterEvent("BAG_UPDATE");
+				EngPaperDollItemSlotButton_OnLoad();
+				EngInventory_Update_BagSlots()
 			</OnLoad>
 			<OnClick>
-				EngBagSlotButton_OnClick();
+				EngInventorySlotButton_OnClick();
 			</OnClick>
 			<OnDragStart>
-				EngBagSlotButton_OnDrag();
+				EngInventorySlotButton_OnDrag();
 			</OnDragStart>
 			<OnReceiveDrag>
-				EngBagSlotButton_OnClick();
+				EngInventorySlotButton_OnClick();
 			</OnReceiveDrag>
 			<OnEnter>
 				BagSlotButton_OnEnter();
@@ -49,7 +50,7 @@
 		</Scripts>
 	</GameTooltip>
 
-	<FontString name="EngInventory_BigFont"  font="Interface\Addons\EngInventory\DAB_CooldownFont.ttf" virtual="true">
+	<FontString name="EngInventory_BigFont"  font="Interface\AddOns\EngBags\DAB_CooldownFont.ttf" virtual="true">
 		<Shadow>
 			<Offset>
 				<AbsDimension x="1" y="-1"/>
@@ -62,7 +63,7 @@
 		<Color r="1" g="0" b="0.25"/>
 	</FontString>
 
-	<Texture name="EngInventory_ButtonBackgroundTemplate" file="Interface\AddOns\EngInventory\skin\button_background" hidden="true" virtual="true">
+	<Texture name="EngInventory_ButtonBackgroundTemplate" file="Interface\AddOns\EngBags\skin\button_background" hidden="true" virtual="true">
 		<Size>
 			<AbsDimension x="64" y="64"/>
 		</Size>
@@ -213,12 +214,101 @@
 				<AbsValue val="8"/>
 			</TileSize>
 			<BackgroundInsets>
-				<AbsInset left="2" right="2" top="2" bottom="2"/>
+				<AbsInset left="4" right="4" top="4" bottom="4"/>
 			</BackgroundInsets>
 		</Backdrop>
 
 		<Layers>
+
 			<Layer level="ARTWORK">
+				<Texture name="$parentPortrait" hidden="true" file="Interface\AddOns\EngBags\Skin\EngPortait" >
+					<Size><AbsDimension x="58" y="58"/></Size>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset><AbsDimension x="-7" y="2"/></Offset>
+						</Anchor>
+					</Anchors>
+				</Texture>
+							
+				<Texture name="$parentTextureTopLeft" file="Interface\AddOns\EngBags\Skin\EngTopLeft" hidden="true">
+					<Size>
+						<AbsDimension x="128" y="128"/>
+					</Size>
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset><AbsDimension x="-67" y="60"/></Offset>
+						</Anchor>
+					</Anchors>
+				</Texture>
+				<Texture name="$parentTextureTopRight" file="Interface\AddOns\EngBags\Skin\EngTopRight" hidden="true">
+					<Size>
+						<AbsDimension x="64" y="128"/>
+					</Size>
+					<Anchors>
+						<Anchor point="TOPRIGHT"> 
+							<Offset><AbsDimension x="36" y="60"/></Offset>
+						</Anchor>
+					</Anchors>
+				</Texture>
+				<Texture name="$parentTextureTopCenter" file="Interface\AddOns\EngBags\Skin\EngTopCenter" hidden="true">
+					<Size>
+						<AbsDimension x="128" y="128"/>
+					</Size>
+					<Anchors>
+						<Anchor point="BOTTOMLEFT" relativeTo="$parentTextureTopLeft" relativePoint="BOTTOMRIGHT"/>
+						<Anchor point="BOTTOMRIGHT" relativeTo="$parentTextureTopRight" relativePoint="BOTTOMLEFT"/>
+					</Anchors>
+				</Texture>
+
+				<Texture name="$parentTextureBottomLeft" file="Interface\AddOns\EngBags\Skin\EngBottomLeft" hidden="true">
+					<Size>
+						<AbsDimension x="128" y="128"/>
+					</Size>
+					<Anchors>
+						<Anchor point="BOTTOMLEFT">
+							<Offset><AbsDimension x="-67" y="-60"/></Offset>
+						</Anchor>
+					</Anchors>
+				</Texture>
+				<Texture name="$parentTextureBottomRight" file="Interface\AddOns\EngBags\Skin\EngBottomRight" hidden="true">
+					<Size>
+						<AbsDimension x="64" y="128"/>
+					</Size>
+					<Anchors>
+						<Anchor point="BOTTOMRIGHT"> 
+							<Offset><AbsDimension x="36" y="-60"/></Offset>
+						</Anchor>
+					</Anchors>
+				</Texture>
+				<Texture name="$parentTextureBottomCenter" file="Interface\AddOns\EngBags\Skin\EngBottomCenter" hidden="true">
+					<Size>
+						<AbsDimension x="128" y="128"/>
+					</Size>
+					<Anchors>
+						<Anchor point="TOPLEFT" relativeTo="$parentTextureBottomLeft" relativePoint="TOPRIGHT"/>
+						<Anchor point="TOPRIGHT" relativeTo="$parentTextureBottomRight" relativePoint="TOPLEFT"/>
+					</Anchors>
+				</Texture>
+
+				<Texture name="$parentTextureLeft" file="Interface\AddOns\EngBags\Skin\EngLeft" hidden="true">
+					<Size>
+						<AbsDimension x="64" y="128"/>
+					</Size>
+					<Anchors>
+						<Anchor point="TOPRIGHT" relativeTo="$parentTextureTopLeft" relativePoint="BOTTOMRIGHT"/>
+						<Anchor point="BOTTOMRIGHT" relativeTo="$parentTextureBottomLeft" relativePoint="TOPRIGHT"/>
+					</Anchors>
+				</Texture>
+				<Texture name="$parentTextureRight" file="Interface\AddOns\EngBags\Skin\EngRight" hidden="true">
+					<Size>
+						<AbsDimension x="64" y="128"/>
+					</Size>
+					<Anchors>
+						<Anchor point="TOPLEFT" relativeTo="$parentTextureTopRight" relativePoint="BOTTOMLEFT"/>
+						<Anchor point="BOTTOMLEFT" relativeTo="$parentTextureBottomRight" relativePoint="TOPLEFT"/>
+					</Anchors>
+				</Texture>
+
 				<Texture name="EngInventory_frame_Item_1_bkgr" inherits="EngInventory_ButtonBackgroundTemplate"/>
 				<Texture name="EngInventory_frame_Item_2_bkgr" inherits="EngInventory_ButtonBackgroundTemplate"/>
 				<Texture name="EngInventory_frame_Item_3_bkgr" inherits="EngInventory_ButtonBackgroundTemplate"/>
@@ -399,31 +489,7 @@
 		</Layers>
 
 		<Frames>
-			<Button name="EngInventory_Button_HighlightToggle" inherits="GameMenuButtonTemplate" text="Hilight New: OFF">
-				<Size><AbsDimension x="150" y="25"/></Size>
-				<Anchors>
-					<Anchor point="TOPLEFT">
-						<Offset>
-							<AbsDimension x="2" y="-2"/>
-						</Offset>
-					</Anchor>
-				</Anchors>
-				<Scripts>
-					<OnClick>
-						EngInventory_Button_HighlightToggle_OnClick();
-					</OnClick>
-					<OnEnter>
-						if (EngInventory_hilight_new == 0) then
-							GameTooltip_AddNewbieTip(EILocal["EngInventory_Button_HighlightToggle_off"], 1.0, 1.0, 1.0, EILocal["EngInventory_Button_HighlightToggle_off_tooltip"]);
-						else
-							GameTooltip_AddNewbieTip(EILocal["EngInventory_Button_HighlightToggle_on"], 1.0, 1.0, 1.0, EILocal["EngInventory_Button_HighlightToggle_on_tooltip"]);
-						end
-					</OnEnter>
-					<OnLeave>
-						GameTooltip:Hide();
-					</OnLeave>
-				</Scripts>
-			</Button>
+
 
 			<Button name="EngInventory_Button_ChangeEditMode" inherits="GameMenuButtonTemplate" text="Edit">
 				<Size><AbsDimension x="85" y="25"/></Size>
@@ -509,7 +575,7 @@
 				<Anchors>
 					<Anchor point="TOPRIGHT">
 						<Offset>
-							<AbsDimension x="-4" y="-2"/>
+							<AbsDimension x="-6" y="-4"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
@@ -546,33 +612,59 @@
 				</Scripts>
 			</Button>
 
-			<Frame name="EngInventory_MoneyFrame" inherits="SmallMoneyFrameTemplate" hidden="true">
+			<Button name="EngInventory_Button_HighlightToggle" inherits="GameMenuButtonTemplate" text="Hilight New: OFF">
+				<Size><AbsDimension x="150" y="25"/></Size>
 				<Anchors>
-					<Anchor point="TOPRIGHT" relativeTo="EngInventory_Button_MoveLockToggle" relativePoint="TOPLEFT">
+				<Anchor point="TOPRIGHT" relativeTo="EngInventory_Button_Close" relativePoint="TOPLEFT">
 						<Offset>
-							<AbsDimension x="-2" y="-5"/>
+							<AbsDimension x="-25" y="0"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						EngInventory_Button_HighlightToggle_OnClick();
+					</OnClick>
+					<OnEnter>
+						if (EngInventory_hilight_new == 0) then
+							GameTooltip_AddNewbieTip(EILocal["EngInventory_Button_HighlightToggle_off"], 1.0, 1.0, 1.0, EILocal["EngInventory_Button_HighlightToggle_off_tooltip"]);
+						else
+							GameTooltip_AddNewbieTip(EILocal["EngInventory_Button_HighlightToggle_on"], 1.0, 1.0, 1.0, EILocal["EngInventory_Button_HighlightToggle_on_tooltip"]);
+						end
+					</OnEnter>
+					<OnLeave>
+						GameTooltip:Hide();
+					</OnLeave>
+				</Scripts>
+			</Button>
+
+			<Frame name="EngInventory_MoneyFrame" inherits="SmallMoneyFrameTemplate" hidden="true">
+				<Size><AbsDimension x="22" y="25"/></Size>
+				<Anchors>
+					<Anchor point="BOTTOMRIGHT">
+						<Offset>
+							<AbsDimension x="5" y="6"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
 			</Frame>
-
-			<Button name="Ch4racterBagSlot1" inherits="EngBagSlotButtonTemplate" id="20">
+						<Button name="Ch4racterBagSlot1" inherits="EngInventorySlotButtonTemplate" id="20">
 				<Anchors>
-					<Anchor point="TOPLEFT" relativeTo="EngInventory_Button_ChangeEditMode" relativePoint="TOPRIGHT">
+					<Anchor point="BOTTOMLEFT" >
 						<Offset>
-							<AbsDimension x="7" y="-2"/>
+							<AbsDimension x="10" y="10"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
 						<Scripts>
 			<OnLoad>
-				this.isBag = 1;
 				EngPaperDollItemSlotButton_OnLoad();
+				this.isBag = 1;
 				this:RegisterEvent("BAG_UPDATE");
 			</OnLoad>
 		</Scripts>
 			</Button>
-			<Button name="Ch4racterBagSlot2" inherits="EngBagSlotButtonTemplate" id="21">
+			<Button name="Ch4racterBagSlot2" inherits="EngInventorySlotButtonTemplate" id="21">
 				<Anchors>
 					<Anchor point="TOPLEFT" relativeTo="Ch4racterBagSlot1" relativePoint="TOPRIGHT">
 						<Offset>
@@ -582,13 +674,13 @@
 				</Anchors>
 										<Scripts>
 			<OnLoad>
-				this.isBag = 2;
 				EngPaperDollItemSlotButton_OnLoad();
+				this.isBag = 2;
 				this:RegisterEvent("BAG_UPDATE");
 			</OnLoad>
 		</Scripts>
 			</Button>
-			<Button name="Ch4racterBagSlot3" inherits="EngBagSlotButtonTemplate" id="22">
+			<Button name="Ch4racterBagSlot3" inherits="EngInventorySlotButtonTemplate" id="22">
 				<Anchors>
 					<Anchor point="TOPLEFT" relativeTo="Ch4racterBagSlot2" relativePoint="TOPRIGHT">
 						<Offset>
@@ -598,13 +690,13 @@
 				</Anchors>
 										<Scripts>
 			<OnLoad>
-				this.isBag = 3;
 				EngPaperDollItemSlotButton_OnLoad();
+				this.isBag = 3;
 				this:RegisterEvent("BAG_UPDATE");
 			</OnLoad>
 		</Scripts>
 			</Button>
-			<Button name="Ch4racterBagSlot4" inherits="EngBagSlotButtonTemplate" id="23">
+			<Button name="Ch4racterBagSlot4" inherits="EngInventorySlotButtonTemplate" id="23">
 				<Anchors>
 					<Anchor point="TOPLEFT" relativeTo="Ch4racterBagSlot3" relativePoint="TOPRIGHT">
 						<Offset>
@@ -614,8 +706,8 @@
 				</Anchors>
 										<Scripts>
 			<OnLoad>
-				this.isBag = 4;
 				EngPaperDollItemSlotButton_OnLoad();
+				this.isBag = 4;
 				this:RegisterEvent("BAG_UPDATE");
 			</OnLoad>
 		</Scripts>
@@ -817,7 +909,7 @@
 			<Button name="EngInventory_frame_Item_158" inherits="EngInventory_ItemButtonTemplate"/>
 			<Button name="EngInventory_frame_Item_159" inherits="EngInventory_ItemButtonTemplate"/>
 			<Button name="EngInventory_frame_Item_160" inherits="EngInventory_ItemButtonTemplate"/>
-			
+
 			<Frame name="$parent_RightClickMenu" inherits="UIDropDownMenuTemplate" id="1" hidden="true">
 				<Scripts>
 					<OnLoad>
@@ -832,11 +924,11 @@
 
 		<Scripts>
 			<OnLoad> 
-				this:RegisterEvent("VARIABLES_LOADED"); 
+				this:RegisterEvent("VARIABLES_LOADED");
+				this:RegisterEvent("ADDON_LOADED");
 			</OnLoad> 
 			<OnEvent> 
 				if (event == "VARIABLES_LOADED") then 
-					EngInventory_init();
 					this:RegisterEvent("BAG_UPDATE");
 					this:RegisterEvent("BAG_UPDATE_COOLDOWN");
 					this:RegisterEvent("ITEM_LOCK_CHANGED");
@@ -844,6 +936,7 @@
 
 					this:RegisterEvent("CRAFT_SHOW");
 					this:RegisterEvent("TRADE_SKILL_SHOW");
+					EngInventory_init();
 				else
 					EngInventory_OnEvent(event);
 				end

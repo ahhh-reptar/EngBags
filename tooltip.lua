@@ -1,5 +1,5 @@
 
-function EngInventory_ReagentHelper_ModifyItemTooltip(bag, slot, tooltipName, itm)
+function EngBags_ReagentHelper_ModifyItemTooltip(bag, slot, tooltipName, itm)
 	if ( ReagentHelper_ModifyTooltip ) then
 		local shouldModifyTooltip = true;
 		if ( Auctioneer_GetFilter ) then
@@ -13,7 +13,7 @@ function EngInventory_ReagentHelper_ModifyItemTooltip(bag, slot, tooltipName, it
 	end
 end
 
-function EngInventory_LootLink_SetTooltipMoney(frame, count, money, stack)
+function EngBags_LootLink_SetTooltipMoney(frame, count, money, stack)
 	if ( not money ) then return; end
 	if ( money <= 0) then return; end
 	if ( count and count > 1 ) then
@@ -35,7 +35,7 @@ function EngInventory_LootLink_SetTooltipMoney(frame, count, money, stack)
 	frame:SetMinimumWidth(moneyFrame:GetWidth() + getglobal(newLine):GetWidth() - 10);
 end
 
-function EngInventory_LootLink_ModifyItemTooltip(bag, slot, tooltipName, itm)
+function EngBags_LootLink_ModifyItemTooltip(bag, slot, tooltipName, itm)
 	local tooltip = getglobal(tooltipName);
 
 	if ( not tooltip ) then
@@ -48,7 +48,7 @@ function EngInventory_LootLink_ModifyItemTooltip(bag, slot, tooltipName, itm)
 
 	local shouldModify = true;
 	if ( ( InRepairMode() ) or
-		( EngInventory_ModifyTooltipsAtMerchant == 0 ) and ( MerchantFrame:IsVisible() ) ) then
+		( EngBags_ModifyTooltipsAtMerchant == 0 ) and ( MerchantFrame:IsVisible() ) ) then
 		shouldModify = false;
 	end
 	if ( 
@@ -63,7 +63,7 @@ function EngInventory_LootLink_ModifyItemTooltip(bag, slot, tooltipName, itm)
 		local data = ItemLinks[name];
 		if ( ( not LootLinkState ) or ( not LootLinkState.HideInfo ) ) and ( name ) and ( data ) then
 			if ( itm ) and ( itm["itemname"] ) then
-				if ( EngInventory_ShowPrice == 1 ) then
+				if ( EngBags_ShowPrice == 1 ) then
 					local money = ItemLinks[name].p;
 					if ( not money ) and ( ItemLinks[name].price ) then
 						money = ItemLinks[name].price;
@@ -73,7 +73,7 @@ function EngInventory_LootLink_ModifyItemTooltip(bag, slot, tooltipName, itm)
 						stack = ItemLinks[name].stack;
 					end
 					if ( money ) then
-						EngInventory_LootLink_SetTooltipMoney(tooltip, itm["itemcount"], money, stack);
+						EngBags_LootLink_SetTooltipMoney(tooltip, itm["itemcount"], money, stack);
 					end
 				end
 				LootLink_AddExtraTooltipInfo(tooltip, name, itm["itemcount"], data);
@@ -109,7 +109,7 @@ end
 
 
 -- itm is the entry from the cache
-function EngInventory_RegisterCurrentTooltipSellValue(tooltip, bag, slot, itm)
+function EngBags_RegisterCurrentTooltipSellValue(tooltip, bag, slot, itm)
 	if ( not itm ) or ( not itm["itemname"] ) or ( strlen(itm["itemname"]) <= 0 ) then
 		return;
 	end
@@ -162,26 +162,26 @@ end
 --
 -- Auctioneer doesn't want to call you. It prefers for you to call it.
 --
--- Packrat:  If you want me to stop calling you, set EngInventory_DontCallPackrat to anything.
+-- Packrat:  If you want me to stop calling you, set EngBags_DontCallPackrat to anything.
 --
-function EngInventory_ModifyItemTooltip(bag, slot, tooltipName, itm)
+function EngBags_ModifyItemTooltip(bag, slot, tooltipName, itm)
 	if ( not tooltipName ) then
 		tooltipName = "GameTooltip";
 	end
 
-	if ( (PackRat ~= nil) and (EngInventory_DontCallPackrat == nil) ) then
+	if ( (PackRat ~= nil) and (EngBags_DontCallPackrat == nil) ) then
 		PackRat._itemEntered = { bag, slot };
 		PackRat:DisplayTooltipPrice()
 	end
 
-	EngInventory_ReagentHelper_ModifyItemTooltip(bag, slot, tooltipName, itm);
-	EngInventory_LootLink_ModifyItemTooltip(bag, slot, tooltipName, itm);
+	EngBags_ReagentHelper_ModifyItemTooltip(bag, slot, tooltipName, itm);
+	EngBags_LootLink_ModifyItemTooltip(bag, slot, tooltipName, itm);
 	local tooltip = getglobal(tooltipName);
 	if ( not tooltip ) then	
 		return;
 	end
 
-	if EnhTooltip and bag and slot then
+	if EnhTooltip and bag and slot and ( bag < 0 or bag > 4 ) then		-- This is only needed for bank bags (-1,6,7,8,9,10)
 		local link = GetContainerItemLink(bag, slot);
 		if (itm["itemname"]) then
 			local texture, itemCount, locked, quality, readable = GetContainerItemInfo(bag, slot);

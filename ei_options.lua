@@ -1,5 +1,6 @@
-
+﻿
 ENGINVENTORY_OPTIONS_UPDATE_HAPPENING = 0;
+ENGINVENTORY_FRAME_LOADED = 0;
 
 ENGINVENTORY_OPTIONS_FRAME_WIDTH = 800;
 ENGINVENTORY_OPTIONS_FRAME_BOTTOMPADDING = 30;
@@ -163,6 +164,8 @@ function EngInventory_Options_EnableLine(frame, elements, y, x_start, available_
 end
 
 function EngInventory_Options_InitWindow()
+	
+	if (ENGINVENTORY_FRAME_LOADED == 0) then
 	EngInventory_CreateConfigOptions();
 
 	EngInventory_Config_MaxScroll = math.max( 1, (table.getn(EngInventory_ConfigOptions)-ENGINVENTORY_OPTS_SCROLL_LINES)+2 );
@@ -184,17 +187,19 @@ function EngInventory_Options_InitWindow()
 	EngInventory_OptsFrame:SetHeight( ENGINVENTORY_OPTIONS_FRAME_HEIGHT );
 
 	EngInventory_OptsFrame:SetBackdropColor(
-		EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_r"],
-		EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_g"],
-		EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_b"],
-		EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_background_a"] );
+		EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_r"],
+		EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_g"],
+		EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_b"],
+		EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_background_a"] );
 	EngInventory_OptsFrame:SetBackdropBorderColor(
-		EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_r"],
-		EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_g"],
-		EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_b"],
-		EngInventoryConfig["bar_colors_"..ENGINVENTORY_MAINWINDOWCOLORIDX.."_border_a"] );
+		EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_r"],
+		EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_g"],
+		EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_b"],
+		EngInventoryConfig["bar_colors_"..EngBags_MAINWINDOWCOLORIDX.."_border_a"] );
 
 	EngInventory_Options_UpdateWindow();
+	ENGINVENTORY_FRAME_LOADED = 1;
+	end
 end
 
 function EngInventory_Options_UpdateWindow()
