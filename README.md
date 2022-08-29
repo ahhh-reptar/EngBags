@@ -8,6 +8,9 @@ EngBags, with some of the changes made by Baroque to EngInventory ported forward
 
 # Changelog
 Recent changes at the top.
+## LaYt's changes
+- Added on hover and on click bag's slots highlight for eazy changing bags
+- Added hide bag's bar settings
 ## Day 1 Patch - Mods Imitate Game Releases
 - Ported most of Baroque's changes to EngInventory forward to EngBags
 - Moved the bag bar to the bottom left

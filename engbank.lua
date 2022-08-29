@@ -509,7 +509,7 @@ if (orig_value == nil) then
 
         if (resetversion == nil) then
                 -- more debugging
-                message("* Warning, EngBank EBank_SetDefault called with nil reset version: "..varname.." *");
+                EngInventory_PrintDEBUG("* Warning, EngBank EBank_SetDefault called with nil reset version: "..varname.." *");
                 resetversion = 0;
         end
 
@@ -540,7 +540,7 @@ if (orig_value == nil) then
 
         if (resetversion == nil) then
                 -- more debugging
-                message("* Warning, EngBank EBags_SetDefault called with nil reset version: "..varname.." *");
+                EngInventory_PrintDEBUG("* Warning, EngBank EBags_SetDefault called with nil reset version: "..varname.." *");
                 resetversion = 0;
         end
 
@@ -772,7 +772,7 @@ function EngBank_SetDefaultValues(re)
 	-- find matching catagories that are not assigned
 	for key,value in EngBankConfig["item_search_list"] do
 		if (EngBankConfig["putinslot--"..value[1]] == nil) then
-			message("EngBank: Unassigned catagory: "..value[1].." -- It has been assigned to slot 1");
+			EngInventory_PrintDEBUG("EngBank: Unassigned catagory: "..value[1].." -- It has been assigned to slot 1");
 			EngBankConfig["putinslot--"..value[1]] = 1;
 		end
 	end
@@ -827,7 +827,7 @@ function EngBank_init()
         else
                 -- have to load something...  :(
                 --EngBags_Print("*** No localization found, stuff won't work properly ***", 1,0.25,0.25 );
-		message("EngBank: No localization found, stuff won't work properly");
+		EngInventory_PrintDEBUG("EngBank: No localization found, stuff won't work properly");
                 EngBank_load_Localization("EN");
         end
 
@@ -1895,7 +1895,7 @@ function EngBank_RightClick_PickupItem()
 	if ( (bagnum ~= nil) and (slotnum ~= nil) ) then
 		PickupContainerItem(bagnum, slotnum);
 	else
-		message("Error, value not found.");
+		EngInventory_PrintDEBUG("Error, value not found.");
 	end
 end
 
@@ -2632,7 +2632,7 @@ function EngBank_MoveAndSizeFrame(frameName, childAttachPoint, parentFrameName, 
                 frame:SetHeight(height);
                 frame:Show();
         else
-                message("Attempt to find frame '"..frameName.."' failed.");
+                EngInventory_PrintDEBUG("Attempt to find frame '"..frameName.."' failed.");
         end
 end
 
