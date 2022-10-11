@@ -37,7 +37,11 @@
 			</OnReceiveDrag>
 			<OnEnter>
 				BagSlotButton_OnEnter();
+				EngInventorySlotButton_OnEnter()
 			</OnEnter>
+		<OnLeave>
+				EngInventorySlotButton_OnLeave()
+			</OnLeave>
 		</Scripts>
 		<CheckedTexture alphaMode="ADD" file="Interface\Buttons\CheckButtonHilight"/>
 	</CheckButton>

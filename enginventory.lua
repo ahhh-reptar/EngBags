@@ -115,13 +115,31 @@ function EngPaperDollItemSlotButton_OnLoad()
 	PaperDollItemSlotButton_Update();
 end
 
-local function EngInventoryHighlightBag(id)
+local function EngInventoryHighlightBag(id, highlight)
 	local bagNumSlots = GetContainerNumSlots(id);
 	for slotnum = 1, bagNumSlots do
-		EngInventory_item_cache[id][slotnum].highlight = not EngInventory_item_cache[id][slotnum].highlight
+		EngInventory_item_cache[id][slotnum].highlight = highlight
 	end
 	EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
 	EngInventory_UpdateWindow();
+end
+
+function EngInventorySlotButton_OnEnter()
+	local id = this:GetID();
+	local translatedID = id - CharacterBag0Slot:GetID() + 1;
+--	local hadItem = PutItemInBag(id);
+--	if ( not hadItem ) then
+		EngInventoryHighlightBag(translatedID,  true)
+--	end
+end
+
+function EngInventorySlotButton_OnLeave()
+	local id = this:GetID();
+	local translatedID = id - CharacterBag0Slot:GetID() + 1;
+--	local hadItem = PutItemInBag(id);
+--	if ( not hadItem ) then
+		EngInventoryHighlightBag(translatedID, this.highlight)
+--	end
 end
 
 function EngInventorySlotButton_OnClick()
@@ -131,7 +149,19 @@ function EngInventorySlotButton_OnClick()
 	if ( not hadItem ) then
 		--	ToggleBag(translatedID);
 		PlaySound("BAGMENUBUTTONPRESS");
-		EngInventoryHighlightBag(translatedID)
+		this.highlight =  not this.highlight;
+		EngInventoryHighlightBag(translatedID,this.highlight)
+		--local itemframe_bkgr = getglobal(this:GetName().."_bkgr");
+		if this.highlight then
+			this:SetNormalTexture("Interface\\Buttons\\UI-ActionButton-Border")
+			this:GetNormalTexture():SetBlendMode("ADD")
+			this:GetNormalTexture():SetAlpha(.8)
+			this:GetNormalTexture():SetVertexColor(0, 0.9, 1)
+		else
+			this:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
+			this:GetNormalTexture():SetBlendMode("BLEND")
+			this:GetNormalTexture():SetVertexColor(1, 1, 1)
+		end
 	end
 	local isVisible = 0;
 	for i=1, NUM_CONTAINER_FRAMES, 1 do
@@ -1178,6 +1208,7 @@ function EngInventory_init()
 		TradeFrame:SetScript("OnShow", EngInventory_newTradeFrameShow);
 	end
 	
+	EngInventory_Update_BagSlots();
 end
 
 function EngInventory_newTradeFrameShow()
@@ -1814,8 +1845,8 @@ function EngInventory_UpdateButton(itemframe, itm)
 			itemframe_bkgr:SetVertexColor(1,1,1,1);
 		end
 	elseif itm.highlight then
-		itemframe_bkgr:SetVertexColor(0,0.9,1,1);
-		itemframe_normaltexture:SetVertexColor(0,0.9,1, 0.5);
+		itemframe_bkgr:SetVertexColor(1,0,0,1);
+		itemframe_normaltexture:SetVertexColor(1,0,0, 1);
 	else
 		-- no hilights, just do your normal work
 		
@@ -2838,14 +2869,13 @@ function EngInventory_frame_RightClickMenu_populate(level)
 				["func"] = function()
 					if (EngInventoryConfig["hide_bags_bar"] == 0) then
 						EngInventoryConfig["hide_bags_bar"] = 1;
-						EngBags_Print("Bags bar showed.");
+						EngBags_Print("Bags bar hided.");
 					else
 						EngInventoryConfig["hide_bags_bar"] = 0;
 						EngBags_Print("Bags bar showed.");
 					end
 					
-					EngInventory_window_update_required = ENGINVENTORY_MANDATORY;
-					EngInventory_UpdateWindow();
+					EngInventory_Update_BagSlots();
 				end
 			};
 			if (EngInventoryConfig["hide_bags_bar"] == 1) then

@@ -157,10 +157,10 @@ function EngBags_Print(msg,r,g,b,frame,id,unknown4th)
         if (not r) then r = 1.0; end
         if (not g) then g = 1.0; end
         if (not b) then b = 0.0; end
-        if ( Print ) then
-                Print(msg, r, g, b, frame, id, unknown4th);
-                return;
-        end
+       -- if ( Print ) then
+    --            Print(msg, r, g, b, frame, id, unknown4th);
+     --           return;
+     --   end
         if(unknown4th) then
                 local temp = id;
                 id = unknown4th;
