@@ -157,10 +157,10 @@ function EngBags_Print(msg,r,g,b,frame,id,unknown4th)
         if (not r) then r = 1.0; end
         if (not g) then g = 1.0; end
         if (not b) then b = 0.0; end
-        if ( Print ) then
-                Print(msg, r, g, b, frame, id, unknown4th);
-                return;
-        end
+       -- if ( Print ) then
+    --            Print(msg, r, g, b, frame, id, unknown4th);
+     --           return;
+     --   end
         if(unknown4th) then
                 local temp = id;
                 id = unknown4th;
@@ -189,12 +189,12 @@ function EngBags_Trim(s)
 end
 
 function EngBags_GetPlayer(ebplayerName)
-	if ( not EngBagsItems[ebplayerName] or (not EngBagsItems[ebplayerName].money and table.getn(EngBagsItems[ebplayerName]) == 0) ) then
-		EngBagsItems[ebplayerName] = {};
+	if ( not EngBagsBankItems[ebplayerName] ) then --or (not EngBagsBankItems[ebplayerName].money and table.getn(EngBagsBankItems[ebplayerName]) == 0) ) then
+		EngBagsBankItems[ebplayerName] = {};
 		EngBags_Print("ERROR: Player's Bank not saved yet! [" .. ebplayerName .. "]");
 	end
 	bankPlayerName = ebplayerName;
-	return EngBagsItems[ebplayerName];
+	return EngBagsBankItems[ebplayerName];
 end
 
 
@@ -273,7 +273,7 @@ function EngBags_UserDropdown_OnClick()
 
 	UIDropDownMenu_SetSelectedValue(EngBags_UserDropdown, this.value);
 	if ( this.value ) then
-		bankPlayer = EngBags_GetPlayer(this.value);
+		EngBags_GetPlayer(this.value);
 	end
 	EngBank_PLAYERID = bankPlayerName;
 	EngBank_AtBank = 0;
@@ -287,7 +287,7 @@ function EngBags_UserDropdown_Initialize()
 	local selectedValue = UIDropDownMenu_GetSelectedValue(EngBags_UserDropdown);
 	local info;
 
-		for key, value in EngBagsItems do
+		for key, value in EngBagsBankItems do
 			local thisRealmPlayers = EngBags_Split(key, "|")[2];
 			if ( thisRealmPlayers == EngBags_Trim(GetCVar("realmName"))  ) then
 				info = {};

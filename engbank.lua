@@ -13,6 +13,7 @@ EngBank_AtBank = 0;
 EngReplaceBank          = 1;
 local BankFrame_Saved = nil;
 
+EngBagsBankItems = {}
 EngBank_item_cache = { {}, {}, {}, {}, {}, {}, {} };	-- cache of all the items as they appear in bags
 EngBank_bar_positions = {};
 EngBank_buttons = {};
@@ -509,7 +510,7 @@ if (orig_value == nil) then
 
         if (resetversion == nil) then
                 -- more debugging
-                message("* Warning, EngBank EBank_SetDefault called with nil reset version: "..varname.." *");
+                EngInventory_PrintDEBUG("* Warning, EngBank EBank_SetDefault called with nil reset version: "..varname.." *");
                 resetversion = 0;
         end
 
@@ -540,7 +541,7 @@ if (orig_value == nil) then
 
         if (resetversion == nil) then
                 -- more debugging
-                message("* Warning, EngBank EBags_SetDefault called with nil reset version: "..varname.." *");
+                EngInventory_PrintDEBUG("* Warning, EngBank EBags_SetDefault called with nil reset version: "..varname.." *");
                 resetversion = 0;
         end
 
@@ -772,7 +773,7 @@ function EngBank_SetDefaultValues(re)
 	-- find matching catagories that are not assigned
 	for key,value in EngBankConfig["item_search_list"] do
 		if (EngBankConfig["putinslot--"..value[1]] == nil) then
-			message("EngBank: Unassigned catagory: "..value[1].." -- It has been assigned to slot 1");
+			EngInventory_PrintDEBUG("EngBank: Unassigned catagory: "..value[1].." -- It has been assigned to slot 1");
 			EngBankConfig["putinslot--"..value[1]] = 1;
 		end
 	end
@@ -802,8 +803,8 @@ function EngBank_init()
 	EngBank_PLAYERID = EngBags_PLAYERID;
 
 
-	if ( EngBagsItems[EngBank_PLAYERID] == nil) then
-		EngBagsItems[EngBank_PLAYERID] = {};
+	if ( EngBagsBankItems[EngBank_PLAYERID] == nil) then
+		EngBagsBankItems[EngBank_PLAYERID] = {};
 	end
 	
 	-- change imported from auctioneer team..  what does it do?
@@ -827,7 +828,7 @@ function EngBank_init()
         else
                 -- have to load something...  :(
                 --EngBags_Print("*** No localization found, stuff won't work properly ***", 1,0.25,0.25 );
-		message("EngBank: No localization found, stuff won't work properly");
+		EngInventory_PrintDEBUG("EngBank: No localization found, stuff won't work properly");
                 EngBank_load_Localization("EN");
         end
 
@@ -1051,7 +1052,7 @@ function EngBank_Update_item_cache()
 	-- variables used in inner loop, slots:
 	local a,b,c,d;
 	local sequencial_slot_num = 0;
-	EngBank_item_cache = EngBagsItems[EngBank_PLAYERID];
+	EngBank_item_cache = EngBagsBankItems[EngBank_PLAYERID];
 
 	for index, bagnum in ipairs(EngBank_Bags) do
 			
@@ -1402,7 +1403,7 @@ function EngBank_Sort_item_cache()
 	local barnum;
 
 	--Print("Resorting Items");
-	EngBank_item_cache = EngBagsItems[EngBank_PLAYERID];
+	EngBank_item_cache = EngBagsBankItems[EngBank_PLAYERID];
 
 	-- wipe the current bar positions table
 	EngBank_bar_positions = {};
@@ -1895,7 +1896,7 @@ function EngBank_RightClick_PickupItem()
 	if ( (bagnum ~= nil) and (slotnum ~= nil) ) then
 		PickupContainerItem(bagnum, slotnum);
 	else
-		message("Error, value not found.");
+		EngInventory_PrintDEBUG("Error, value not found.");
 	end
 end
 
@@ -2499,7 +2500,7 @@ function EngBank_frame_RightClickMenu_populate(level)
 				["value"] = nil,
 				["func"] = function()
 						if (EngBank_AtBank==1) then		-- To avoid cleaning the bank cache, u only can reload bags at bank.
-							EngBagsItems[EngBank_PLAYERID] = {};
+							EngBagsBankItems[EngBank_PLAYERID] = {};
 							EngBank_window_update_required = EngBank_REQUIRED;
 							EngBank_UpdateWindow();
 							EngBags_Print("Bags reloaded.");
@@ -2632,7 +2633,7 @@ function EngBank_MoveAndSizeFrame(frameName, childAttachPoint, parentFrameName, 
                 frame:SetHeight(height);
                 frame:Show();
         else
-                message("Attempt to find frame '"..frameName.."' failed.");
+                EngInventory_PrintDEBUG("Attempt to find frame '"..frameName.."' failed.");
         end
 end
 
