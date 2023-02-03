@@ -13,6 +13,7 @@ EngBank_AtBank = 0;
 EngReplaceBank          = 1;
 local BankFrame_Saved = nil;
 
+EngBagsBankItems = {}
 EngBank_item_cache = { {}, {}, {}, {}, {}, {}, {} };	-- cache of all the items as they appear in bags
 EngBank_bar_positions = {};
 EngBank_buttons = {};
@@ -802,8 +803,8 @@ function EngBank_init()
 	EngBank_PLAYERID = EngBags_PLAYERID;
 
 
-	if ( EngBagsItems[EngBank_PLAYERID] == nil) then
-		EngBagsItems[EngBank_PLAYERID] = {};
+	if ( EngBagsBankItems[EngBank_PLAYERID] == nil) then
+		EngBagsBankItems[EngBank_PLAYERID] = {};
 	end
 	
 	-- change imported from auctioneer team..  what does it do?
@@ -1051,7 +1052,7 @@ function EngBank_Update_item_cache()
 	-- variables used in inner loop, slots:
 	local a,b,c,d;
 	local sequencial_slot_num = 0;
-	EngBank_item_cache = EngBagsItems[EngBank_PLAYERID];
+	EngBank_item_cache = EngBagsBankItems[EngBank_PLAYERID];
 
 	for index, bagnum in ipairs(EngBank_Bags) do
 			
@@ -1402,7 +1403,7 @@ function EngBank_Sort_item_cache()
 	local barnum;
 
 	--Print("Resorting Items");
-	EngBank_item_cache = EngBagsItems[EngBank_PLAYERID];
+	EngBank_item_cache = EngBagsBankItems[EngBank_PLAYERID];
 
 	-- wipe the current bar positions table
 	EngBank_bar_positions = {};
@@ -2499,7 +2500,7 @@ function EngBank_frame_RightClickMenu_populate(level)
 				["value"] = nil,
 				["func"] = function()
 						if (EngBank_AtBank==1) then		-- To avoid cleaning the bank cache, u only can reload bags at bank.
-							EngBagsItems[EngBank_PLAYERID] = {};
+							EngBagsBankItems[EngBank_PLAYERID] = {};
 							EngBank_window_update_required = EngBank_REQUIRED;
 							EngBank_UpdateWindow();
 							EngBags_Print("Bags reloaded.");

@@ -2854,7 +2854,7 @@ function EngInventory_frame_RightClickMenu_populate(level)
 					B4nkFrameBag4:Hide();
 					B4nkFrameBag5:Hide();
 					B4nkFrameBag6:Hide();
-					EngBags_UserDropdown:Show();
+					--EngBags_UserDropdown:Show();
 					EngBank_frame:Show();
 				end
 			};

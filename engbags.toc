@@ -3,8 +3,8 @@
 ## Notes: AutoSorting Bags
 ## RequiredDeps: 
 ## OptionalDeps: lootlink, auctioneer, equipcompare
-## SavedVariables: EngBagsItems, EngBagsConfig
-## SavedVariablesPerCharacter:
+## SavedVariables: EngBagsConfig 
+## SavedVariablesPerCharacter: EngBagsBankItems
 ## Dependencies: 
 EngBank.xml
 eb_options.xml
